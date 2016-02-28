@@ -6,17 +6,16 @@
 main() ->
 	search_site("http://sweclockers.com/").
 
-% Get body from site
-% Search for links
+
+% Find all URLs on website
 search_site(Url) ->
 	Body = get_site_body(Url),
-%	Body = (list_to_binary(BodyList)),
 
+	%Body = (list_to_binary(BodyList)),
         %Body = "asdwww.sweclockers.com  a pahttp://swec.com apa",
+	
 	UrlList =  search_text_for_url(Body, "", false),
 	(UrlList).
-	%make list to list of tuples where each have occurances of url and remove duplicates
-	%read text file, do the same and save
 
 
 %Search text for URLs and return those 
@@ -24,28 +23,28 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 
 	AllTextEmpty = string:equal(Text, ""),	
 
+	%We are done
 	if(AllTextEmpty) ->
 		  CurrentURL;
 
-  
 	(true) ->
 		[NextChar | TextNew] = Text,
 		NextIsIllegal = unallowed_char(NextChar),
 		TextIsEmpty = string:equal(TextNew, ''),
 		
-		%Currently not in URL
 		%look for start of valid URL
 		if (not CurrentIsURL) ->
-			if(NextIsIllegal) ->
-				io:fwrite("i"),
+			
+			%remove illegal char
+		   	if(NextIsIllegal) ->
 				if(TextIsEmpty) ->
 					CurrentURL;
 				(not TextIsEmpty) ->
 					search_text_for_url(TextNew, "", false)
 				end;
-			 
+
+			%look for valid URL prefix
 			(true) ->
-				io:fwrite("l"),
 				{Prefix, TextNew} = find_remove_url_prefix(Text),
 				IsUrl = not string:equal(Prefix, ""),
 					
@@ -56,18 +55,19 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 				end
 			end;
 
-		%We are in the middle of a URL
-		%continue adding to url until " " or EOF
-		(true) ->
-			%NextIsSpace = string:equal([NextChar], " "), %ALREADY CHECKED IN unallowed_char !
-			%TextIsEmpty = string:equal(TextNew, ''),
 
+		%We are in the middle of a URL
+		%continue adding to url until illegal char or EOF
+		(true) ->
+			%URL finished processing
 			if(NextIsIllegal) ->
 				if(TextIsEmpty) ->
 					CurrentURL;
 				(not TextIsEmpty) ->
 					CurrentURL ++ "\n" ++ search_text_for_url(TextNew, "", false)
 				end;
+
+			%Continuing adding to URL
 			(not NextIsIllegal) ->
 				if(TextIsEmpty) ->
 					  CurrentURL ++ NextChar; 
@@ -80,31 +80,35 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 	end.
 
 
-%If Text starts with an url prefix (www. http://)
+%If Text starts with an url prefix (eg www. http://)
 %Then remove that prefix otherwise only remove first char
 find_remove_url_prefix(Text) ->
 	ValidPrefix = ["http://", "www."],
-	
-	%Text starts with ValidPrefix
-	ActualPrefix = starts_with_on_list(Text, ValidPrefix),	
-	IsValid = not string:equal(ActualPrefix, ""),
-	
 	TextLen = string:len(Text),
-	if (IsValid) ->
-		% Remove prefix from text
-		CharsToCompare = min(string:len(ActualPrefix)+1,string:len(Text)),
-		{ActualPrefix, string:substr(Text, CharsToCompare)};
+	
+	%Valid if text starts with prefix
+	TextMatchingPrefix = starts_with_on_list(Text, ValidPrefix),	
+	PrefixIsValid = not string:equal(TextMatchingPrefix, ""),
+	
+	if (PrefixIsValid) ->
+		CharsToCompare = min(string:len(TextMatchingPrefix)+1,TextLen+1),
+		
+		% Remove prefix from text (or everything if text is shorter)
+		% Return tuple with prefix and text seperated
+		{TextMatchingPrefix, string:substr(Text, CharsToCompare)};
+	
+	%No prefix found remove first character
+	%do nothing if Text is empty
 	(true) ->
-		   if (TextLen < 2) ->
-			      {"",""};
-		   (true) ->
-			   {"",string:substr(Text,2)} %remove first char
-		end
+		ElemToRemove = min(TextLen+1, 2),
+		{"",string:substr(Text, ElemToRemove)}
 	end.
 
-%Does string start with any of supplied substrings,
-%Returns first substring that matches this, else return ""
+
+%Returns substring if another string begins with it
 starts_with_on_list(String, [SubString | SubStrings]) ->
+
+	%There are multple substrings, search recursively before giving up
 	if (SubStrings /= []) ->
 		FoundMatch = starts_with(String, SubString),
 		if (FoundMatch) ->
@@ -112,88 +116,50 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 		(not FoundMatch) ->
 			starts_with_on_list(String, SubStrings)
 		end;
+	
+	
 	(true) ->
 		FoundMatch = starts_with(String, SubString),
 		if (FoundMatch) ->
 			SubString;
+		   
+		% Not found return ""
 		(not FoundMatch) ->
 			""
 		end
 	end.
 
 
-%Does string start with supplied string,
-%if string is smaller than substring just match on available characters
+%Does string start with substring
+%Matches on available characters if string is smaller
 starts_with(String, SubString) ->
-	StringFormated = String,
-	%	StringFormated = list_to_binary(String),
-	IndexOfSubStr = string:str(StringFormated, SubString),
-	CharsToCompare = min(string:len(SubString)+1,string:len(String)),
 
-	% True if String contains Substring, and only if SubString starts at first char
+	%Shorten SubString if longer than String
+	CharsToKeep = min(string:len(SubString)+1,string:len(String)+1),
+	SubStringShort = string:substr(String, CharsToKeep),
+	
+	%Is SubStringShort in String, where does it start
+	IndexOfSubStr = string:str(String, SubStringShort), %!PROBABLY INEFFICIENT searches through all text!
+
+	%String begins with SubString
 	if (IndexOfSubStr == 1) ->
-		string:substr(String, CharsToCompare),
 		true;
+	
 	true ->
 		false
 	end.
 
+
+%Is char allowed in URL
 unallowed_char(Char) ->
 	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=",
-	
 	IllegalChar = not lists:member(Char, AllowedChars),
 
 	IllegalChar.
 
 
-
-
-%Send get request to server (resolves DNS etc)
-%Returns body of specified url
+%Send HTTP GET request to server, return body
 get_site_body(Url) ->
 	inets:start(),
-	%UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1",
-	% {ok, {{HttpVer, Code, Msg}, Headers, Body}} =
 	{ok, {_, _, Body}} = httpc:request(Url),
 	Body.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-%create_udp_socket() ->
-%	PortNr = trunc(random:uniform()*30000), %varför i självaste fan ska det vara '=' här
-%	io:fwrite("Trying to bind port ~p \n", [PortNr]),	
-%	if
-%		((PortNr < 2000) or (PortNr > 30000)) -> % or (PortNr > 30000)) ->
-%			io:fwrite("Invalid port, retrying..\n"),
-%			main(),
-%			exit(self(), normal); 
-%		true ->
-%			Socket = {PortBound, SocketId} = gen_udp:open(PortNr),
-%			if
-%				(PortBound /= ok) ->
-%					main(),
-%					exit(self(), normal);
-%				true ->	
-%					io:fwrite("Success!\n")
-%			end
-%	end.
-
-%	case Socket of
-%		undefined ->
-%			{0, 0};
-%		_ ->
-%			Socket
-%	end;
-
