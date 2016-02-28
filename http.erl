@@ -37,7 +37,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 		%look for start of valid URL
 		if (not CurrentIsURL) ->
 			if(NextIsIllegal) ->
-				io:fwrite("b"),
+				io:fwrite("i"),
 				if(TextIsEmpty) ->
 					CurrentURL;
 				(not TextIsEmpty) ->
@@ -45,7 +45,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 				end;
 			 
 			(true) ->
-				io:fwrite("a"),
+				io:fwrite("l"),
 				{Prefix, TextNew} = find_remove_url_prefix(Text),
 				IsUrl = not string:equal(Prefix, ""),
 					
@@ -141,15 +141,9 @@ starts_with(String, SubString) ->
 unallowed_char(Char) ->
 	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=",
 	
-	IllegalChar = not lists:member(Char, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;="),
-	%CharAllowedPos = string:substr(AllowedChars, [Char]),
+	IllegalChar = not lists:member(Char, AllowedChars),
 
 	IllegalChar.
-%	if (CharAllowedPos == 0) ->
-%		   true; %Char is illegal
-%	(true) ->
-%		   false
-%	end.
 
 
 
