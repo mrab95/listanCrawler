@@ -1,10 +1,9 @@
 This tool does NOT work at the moment.
 
-Goal: Search a website recursively for any URL matching domain or keyword, saving to a text file with relevant URLs found and their frequency. Consider how to allow for concurrent searching.
+Goal: Search a website recursively for any URL matching specified domain or keyword, save the result and their frequency to file. Consider how to allow for concurrent searching.
 
 
-
-Sends a HTTP GET request to a domain, searches the body of recieved HTML-page for any URL.
+Sends a HTTP GET request to a domain, searches the body of recieved HTML-page for any URLs found.
 
 TODO:
 
