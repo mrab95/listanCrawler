@@ -1,7 +1,23 @@
--module(http).
--include_lib("kernel/include/inet.hrl").
--export([main/0]).
+% listanCrawler   Copyright © 2016   Eliot Roxbergh 
+%
+% This program is free software: you can redistribute it and/or modify
+% it under the terms of the GNU General Public License version 3 as published by
+% the Free Software Foundation.
+% 
+% This program is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+% GNU General Public License for more details.
 
+
+-module      (listanCrawler).
+-export      ([main/0, search_site/1]).
+
+-include_lib ("kernel/include/inet.hrl").
+
+
+
+%list_to_binary(Body)
 
 main() ->
 	search_site("http://sweclockers.com/").
@@ -10,9 +26,6 @@ main() ->
 % Find all URLs on website
 search_site(Url) ->
 	Body = get_site_body(Url),
-
-	%Body = (list_to_binary(BodyList)),
-        %Body = "asdwww.sweclockers.com  a pahttp://swec.com apa",
 	
 	UrlList =  search_text_for_url(Body, "", false),
 	io:fwrite(UrlList),
@@ -94,7 +107,7 @@ find_remove_url_prefix(Text) ->
 	TextLen = string:len(Text),
 	
 	%Valid if text starts with prefix
-	TextMatchingPrefix = starts_with_on_list(Text, ValidPrefix),	
+	TextMatchingPrefix = starts_with_these(Text, ValidPrefix),	
 	PrefixIsValid = not string:equal(TextMatchingPrefix, ""),
 	
 	%Remove valid prefix from text, return seperated
@@ -113,16 +126,16 @@ find_remove_url_prefix(Text) ->
 
 
 %Returns substring if another string begins with it
-starts_with_on_list(String, [SubString | SubStrings]) ->
+starts_with_these(String, [SubString | SubStrings]) ->
 
-	FoundMatch = starts_with(String, SubString),
+	FoundMatch = starts_with_this(String, SubString),
 	
 	%There are multple substrings, search recursively before giving up
 	if (SubStrings /= []) ->
 		if (FoundMatch) ->
 			SubString;
 		(not FoundMatch) ->
-			starts_with_on_list(String, SubStrings)
+			starts_with_these(String, SubStrings)
 		end;
 	
 	
@@ -139,7 +152,7 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 
 %Does string start with substring
 %Matches on available characters if string is smaller
-starts_with(String, SubString) ->
+starts_with_this(String, SubString) ->
 	CharsLeft = min(string:len(String),string:len(SubString)),
 	
 	%Make same length
@@ -161,7 +174,7 @@ starts_with(String, SubString) ->
 		CharsEqual = string:equal([A],[B]),
 
 		if(CharsEqual) ->
-		 	starts_with(AS,BS);
+		 	starts_with_this(AS,BS);
 		true ->
 			 false
 		end
@@ -181,21 +194,20 @@ unallowed_char(Char) ->
 %Send HTTP GET request to server, return body
 get_site_body(Url) ->
 	application:start(inets),
-%	inets:start(),
 	get_site_body_helper(Url, 10).
 
 
 % Retry if GET request fails, until success or no tries left
 get_site_body_helper(Url, TriesLeft) ->
-	WaitAfterFail = 2000,
-%	{Successful, {_, _, Body}} = httpc:request(Url),
+	WaitAfterFail = 2000, %ms
 	GetReq = httpc:request(Url),
-	{Successful, _ } = GetReq,
+	{Response, _ } = GetReq,
 	
-	if (Successful == ok) ->
+	if (Response == ok) ->
 		{_,{_,_, Body}} = GetReq,
 		Body;
-	(Successful /= ok) ->
+
+   	(Response /= ok) ->
 		io:fwrite("Cannot connect, retrying.. tries left: ~p \n", [TriesLeft-1]),
 		if(TriesLeft == 1) ->
 			erlang:error(timeout);	
