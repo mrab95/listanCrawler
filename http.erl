@@ -18,6 +18,15 @@ search_site(Url) ->
 	io:fwrite(UrlList),
 	UrlList.
 
+search_text_for_url_helper(Prefix, TextNew) ->
+	IsUrl = not string:equal(Prefix, ""),
+  
+	if (IsUrl) ->
+		search_text_for_url(TextNew, Prefix, true);
+	(not IsUrl) ->
+		search_text_for_url(TextNew, "", false)
+	end.
+
 
 %Search text for URLs and return those 
 search_text_for_url(Text, CurrentURL, CurrentIsURL) ->	
@@ -40,23 +49,9 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 
 		  %look for valid URL prefix
 		(true) ->
-			try ({Prefix, TextNew} = find_remove_url_prefix(Text)),
 	
-			% !comment me please!
-			catch
-				error:badmatch -> hej.%We're done
-			
-				%{error, caught, badmatch}
-			end,
-
 			{Prefix, TextNew} = find_remove_url_prefix(Text),
-			IsUrl = not string:equal(Prefix, ""),
-		
-			if (IsUrl) ->
-				search_text_for_url(TextNew, Prefix, true);
-			(not IsUrl) ->
-				search_text_for_url(TextNew, "", false)
-			end
+			search_text_for_url_helper(Prefix, TextNew)
 		end;
 
 
@@ -91,19 +86,29 @@ find_remove_url_prefix(Text) ->
 	
 	%Valid if text starts with prefix
 	TextMatchingPrefix = starts_with_on_list(Text, ValidPrefix),	
+	io:fwrite(TextMatchingPrefix),
 	PrefixIsValid = not string:equal(TextMatchingPrefix, ""),
 	
+	% PREFIX IS VALID ALLTID TRUE	
+
 	if (PrefixIsValid) ->
+	%	io:fwrite("b"),
 		CharsToCompare = min(string:len(TextMatchingPrefix)+1,TextLen+1),
-		
-		% Remove prefix from text (or everything if text is shorter)
-		% Return tuple with prefix and text seperated
-		{TextMatchingPrefix, string:substr(Text, CharsToCompare)};
-	
+		TextNew = string:substr(Text, CharsToCompare),
+	%	TextNewEmpty = string:equal(TextNew, ""),
+		%if empty return [' '] instead
+	%	if (TextNewEmpty) -> {TextMatchingPrefix, " "};
+	%	   (true)		   -> {TextMatchingPrefix, TextNew}
+	%	end;
+	%	{"a", "b"};
+				{TextMatchingPrefix, TextNew};
 	%No prefix found remove first character
 	(true) ->
+		io:fwrite("a"),
 		ElemToRemove = min(TextLen+1, 2),
-		{"",string:substr(Text, ElemToRemove)}
+		TextNew =string:substr(Text, ElemToRemove),
+%		{"a", "b"}
+			{"", TextNew}
 	end.
 
 
