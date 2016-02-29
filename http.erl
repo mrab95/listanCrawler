@@ -15,66 +15,62 @@ search_site(Url) ->
         %Body = "asdwww.sweclockers.com  a pahttp://swec.com apa",
 	
 	UrlList =  search_text_for_url(Body, "", false),
-	(UrlList).
+	io:fwrite(UrlList),
+	UrlList.
 
 
 %Search text for URLs and return those 
 search_text_for_url(Text, CurrentURL, CurrentIsURL) ->	
 
-	AllTextEmpty = string:equal(Text, ""),	
+	%maybe fails on text starting empty
+	[NextChar | TextNew] = Text,
+	NextIsIllegal = unallowed_char(NextChar),
+	TextIsEmpty = string:equal(TextNew, ""),
 
-	%We are done
-	if(AllTextEmpty) ->
-		  CurrentURL;
-
-	(true) ->
-		[NextChar | TextNew] = Text,
-		NextIsIllegal = unallowed_char(NextChar),
-		TextIsEmpty = string:equal(TextNew, ''),
+	%look for start of valid URL
+	if (not CurrentIsURL) ->
 		
-		%look for start of valid URL
-		if (not CurrentIsURL) ->
-			
-			%remove illegal char
-		   	if(NextIsIllegal) ->
-				if(TextIsEmpty) ->
-					CurrentURL;
-				(not TextIsEmpty) ->
-					search_text_for_url(TextNew, "", false)
-				end;
-
-			%look for valid URL prefix
-			(true) ->
-				{Prefix, TextNew} = find_remove_url_prefix(Text),
-				IsUrl = not string:equal(Prefix, ""),
-					
-				if (IsUrl) ->
-					search_text_for_url(TextNew, Prefix, true);
-				(not IsUrl) ->
-					search_text_for_url(TextNew, "", false)
-				end
+		%remove illegal char
+	   	if(NextIsIllegal) ->
+			if(TextIsEmpty) ->
+				CurrentURL;
+			(not TextIsEmpty) ->
+				search_text_for_url(TextNew, "", false)
 			end;
 
-
-		%We are in the middle of a URL
-		%continue adding to url until illegal char or EOF
+		  %look for valid URL prefix
 		(true) ->
-			%URL finished processing
-			if(NextIsIllegal) ->
-				if(TextIsEmpty) ->
-					CurrentURL;
-				(not TextIsEmpty) ->
-					CurrentURL ++ "\n" ++ search_text_for_url(TextNew, "", false)
-				end;
+			{Prefix, TextNew} = find_remove_url_prefix(Text),
+			IsUrl = not string:equal(Prefix, ""),
+		
+			%IsUrl blir inte true?
+			%find remove url prefix is broken?
+			if (IsUrl) ->
+				search_text_for_url(TextNew, Prefix, true);
+			(not IsUrl) ->
+				search_text_for_url(TextNew, "", false)
+			end
+		end;
 
-			%Continuing adding to URL
-			(not NextIsIllegal) ->
-				if(TextIsEmpty) ->
-					  CurrentURL ++ NextChar; 
-				(not TextIsEmpty) ->
-					  TmpURL = CurrentURL ++ [NextChar],
-					  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
-				end
+
+	%We are in the middle of a URL
+	%continue adding to url until illegal char or EOF
+	(true) ->
+		%URL finished processing
+		if(NextIsIllegal) ->
+			if(TextIsEmpty) ->
+				CurrentURL;
+			(not TextIsEmpty) ->
+				CurrentURL ++ "\n" ++ search_text_for_url(TextNew, "", false)
+			end;
+
+		%Continuing adding to URL
+		(not NextIsIllegal) ->
+			if(TextIsEmpty) ->
+				  CurrentURL ++ NextChar; 
+			(not TextIsEmpty) ->
+				  TmpURL = CurrentURL ++ [NextChar],
+				  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
 			end
 		end
 	end.
@@ -119,7 +115,7 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 	
 	
 	(true) ->
-		FoundMatch = starts_with(String, SubString),
+		FoundMatch = starts_with(String, SubString), % I DONT WORK HERE
 		if (FoundMatch) ->
 			SubString;
 		   
@@ -136,11 +132,12 @@ starts_with(String, SubString) ->
 
 	%Shorten SubString if longer than String
 	CharsToKeep = min(string:len(SubString)+1,string:len(String)+1),
-	SubStringShort = string:substr(String, CharsToKeep),
-	
+	SubStringShort = string:substr(SubString, CharsToKeep),
+
+
 	%Is SubStringShort in String, where does it start
 	IndexOfSubStr = string:str(String, SubStringShort), %!PROBABLY INEFFICIENT searches through all text!
-
+	
 	%String begins with SubString
 	if (IndexOfSubStr == 1) ->
 		true;
