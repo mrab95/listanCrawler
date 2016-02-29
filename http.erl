@@ -50,7 +50,9 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 		  %look for valid URL prefix
 		(true) ->
 	
-			{Prefix, TextNew} = find_remove_url_prefix(Text),
+			%{Prefix, TextNew}
+			Tmp = find_remove_url_prefix(Text),
+			{Prefix, TextNew} = Tmp,
 			search_text_for_url_helper(Prefix, TextNew)
 		end;
 
@@ -86,29 +88,34 @@ find_remove_url_prefix(Text) ->
 	
 	%Valid if text starts with prefix
 	TextMatchingPrefix = starts_with_on_list(Text, ValidPrefix),	
-	io:fwrite(TextMatchingPrefix),
+	%io:fwrite(TextMatchingPrefix),
 	PrefixIsValid = not string:equal(TextMatchingPrefix, ""),
 	
-	% PREFIX IS VALID ALLTID TRUE	
-
+	% LITE FAKTA
+	% till slut så är
+	% TextMatchingPrefix = http://
+	% PrefixIsValid = true
+	% verkar som starts with on list returnerar fel
+	% !! EXCEPTION ERROR no match of right hand side value 
+	
 	if (PrefixIsValid) ->
-	%	io:fwrite("b"),
-		CharsToCompare = min(string:len(TextMatchingPrefix)+1,TextLen+1),
-		TextNew = string:substr(Text, CharsToCompare),
-	%	TextNewEmpty = string:equal(TextNew, ""),
-		%if empty return [' '] instead
-	%	if (TextNewEmpty) -> {TextMatchingPrefix, " "};
-	%	   (true)		   -> {TextMatchingPrefix, TextNew}
-	%	end;
-	%	{"a", "b"};
-				{TextMatchingPrefix, TextNew};
-	%No prefix found remove first character
-	(true) ->
-		io:fwrite("a"),
+		PrefixLen = string:len(TextMatchingPrefix),
+		ElemToRemove = min(PrefixLen+1,TextLen+1),
+		TextNew = string:substr(Text, ElemToRemove),
+		io:fwrite(Text),
+		io:fwrite("\n\n\n\n\n\n"),
+		io:fwrite(TextNew),
+		{TextMatchingPrefix, TextNew};
+	
+
+	% !! VERKAR FUNKA
+   	%No prefix found remove first character
+	(not PrefixIsValid) ->
+%		io:fwrite("a"),
+
 		ElemToRemove = min(TextLen+1, 2),
 		TextNew =string:substr(Text, ElemToRemove),
-%		{"a", "b"}
-			{"", TextNew}
+		{"", TextNew}
 	end.
 
 
@@ -140,22 +147,32 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 %Does string start with substring
 %Matches on available characters if string is smaller
 starts_with(String, SubString) ->
+	StringLen = string:len(String),
+	SubStringLen = string:len(SubString),
+	CharsLeft = min(StringLen,SubStringLen),
 
-	%Shorten SubString if longer than String
-	CharsToKeep = min(string:len(SubString)+1,string:len(String)+1),
-	SubStringShort = string:substr(SubString, CharsToKeep),
+	% Bad argument (empty list) 
+	if (CharsLeft < 1) ->
+		false;
 
-
-	%Is SubStringShort in String, where does it start
-	IndexOfSubStr = string:str(String, SubStringShort), %!PROBABLY INEFFICIENT searches through all text!
+	% Last char, all chars before were equal, compare and return
+  	(CharsLeft == 1) ->
+		string:equals(String, SubString)
 	
-	%String begins with SubString
-	if (IndexOfSubStr == 1) ->
-		true;
-	
-	true ->
-		false
+	% Compare char is equal, check next one if so
+	 (CharsLeft > 1) ->
+		[a|as] = String,
+		[b|bs] = SubString,
+		CharsEqual = string:equals(a,b),
+
+		if(CharsEqual) ->
+		 	 starts_with(as,bs);
+		true ->
+			 false
+		end
 	end.
+
+
 
 
 %Is char allowed in URL
@@ -170,11 +187,28 @@ unallowed_char(Char) ->
 get_site_body(Url) ->
 	application:start(inets),
 %	inets:start(),
-	{ok, {_, _, Body}} = httpc:request(Url),
-	Body.
+	get_site_body_helper(Url, 10).
 
 
+% Retry if GET request fails, until success or no tries left
+get_site_body_helper(Url, TriesLeft) ->
+	WaitAfterFail = 2000,
+	{Successful, {_, _, Body}} = httpc:request(Url),
+	
+	if (Successful == ok) ->
+		Body;
+	(Successful /= ok) ->
+		if(TriesLeft == 1) ->
+			erlang:error(http_timeout);	
+		true ->
+			io:fwrite("\nCannot connect, retrying.. tries left: ~p", TriesLeft-1),
+			timer:sleep(WaitAfterFail),
+			get_site_body_helper(Url,TriesLeft-1)
+		end
+	end.
 
+	
+%FOR TLS
 %application:start(crypto),
 %application:start(public_key),
 %application:start(ssl),
