@@ -18,63 +18,67 @@ search_site(Url) ->
 	io:fwrite(UrlList),
 	UrlList.
 
-search_text_for_url_helper(Prefix, TextNew) ->
-	IsUrl = not string:equal(Prefix, ""),
-  
-	if (IsUrl) ->
-		search_text_for_url(TextNew, Prefix, true);
-	(not IsUrl) ->
-		search_text_for_url(TextNew, "", false)
-	end.
 
 
 %Search text for URLs and return those 
 search_text_for_url(Text, CurrentURL, CurrentIsURL) ->	
-
-	%maybe fails on text starting empty
-	[NextChar | TextNew] = Text,
-	NextIsIllegal = unallowed_char(NextChar),
-	TextIsEmpty = string:equal(TextNew, ""),
-
-	%look for start of valid URL
-	if (not CurrentIsURL) ->
-		
-		%remove illegal char
-	   	if(NextIsIllegal) ->
-			if(TextIsEmpty) ->
-				CurrentURL;
-			(not TextIsEmpty) ->
-				search_text_for_url(TextNew, "", false)
-			end;
-
-		  %look for valid URL prefix
-		(true) ->
 	
-			%{Prefix, TextNew}
-			Tmp = find_remove_url_prefix(Text),
-			{Prefix, TextNew} = Tmp,
-			search_text_for_url_helper(Prefix, TextNew)
-		end;
+	TextLen = string:len(Text),
+	if(TextLen < 1) ->
+		  [];
 
+  	true ->
+		%maybe fails on text starting empty
+		[NextChar | TextNew] = Text,
+		NextIsIllegal = unallowed_char(NextChar),
+		TextIsEmpty = string:equal(TextNew, ""),
 
-	%We are in the middle of a URL
-	%continue adding to url until illegal char or EOF
-	(true) ->
-		%URL finished processing
-		if(NextIsIllegal) ->
-			if(TextIsEmpty) ->
-				CurrentURL;
-			(not TextIsEmpty) ->
-				CurrentURL ++ "\n" ++ search_text_for_url(TextNew, "", false)
+		%look for start of valid URL
+		if (not CurrentIsURL) ->
+			
+			%remove illegal char
+		   	if(NextIsIllegal) ->
+				if(TextIsEmpty) ->
+					CurrentURL;
+				(not TextIsEmpty) ->
+					search_text_for_url(TextNew, "", false)
+				end;
+
+			%look for valid URL prefix
+			true ->
+	
+	% !! EXCEPTION ERROR no match of right hand side value !! 
+			
+			  	{Prefix, TextNew} = find_remove_url_prefix(Text),
+				IsUrl = not string:equal(Prefix, ""),
+		  
+				if (IsUrl) ->
+					search_text_for_url(TextNew, Prefix, true);
+				(not IsUrl) ->
+					search_text_for_url(TextNew, "", false)
+				end
 			end;
-
-		%Continuing adding to URL
-		(not NextIsIllegal) ->
-			if(TextIsEmpty) ->
-				  CurrentURL ++ NextChar; 
-			(not TextIsEmpty) ->
-				  TmpURL = CurrentURL ++ [NextChar],
-				  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
+	
+	
+		%We are in the middle of a URL
+		%continue adding to url until illegal char or EOF
+		true ->
+			%URL finished processing
+			if(NextIsIllegal) ->
+				if(TextIsEmpty) ->
+					CurrentURL;
+				(not TextIsEmpty) ->
+					CurrentURL ++ "\n" ++ search_text_for_url(TextNew, "", false)
+				end;
+	
+			%Continuing adding to URL
+			(not NextIsIllegal) ->
+				if(TextIsEmpty) ->
+					  CurrentURL ++ NextChar; 
+				(not TextIsEmpty) ->
+					  TmpURL = CurrentURL ++ [NextChar],
+					  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
+				end
 			end
 		end
 	end.
@@ -83,38 +87,27 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 %If Text starts with an url prefix (eg www. http://)
 %Then remove that prefix otherwise only remove first char
 find_remove_url_prefix(Text) ->
-	ValidPrefix = ["http://", "www."],
+
+	% Order is relevant, we want to look for http:// before www.
+	% ! ADD HTTPS, more? !
+	ValidPrefix = ["http://", "https://" , "www."],
 	TextLen = string:len(Text),
 	
 	%Valid if text starts with prefix
 	TextMatchingPrefix = starts_with_on_list(Text, ValidPrefix),	
-	%io:fwrite(TextMatchingPrefix),
 	PrefixIsValid = not string:equal(TextMatchingPrefix, ""),
 	
-	% LITE FAKTA
-	% till slut så är
-	% TextMatchingPrefix = http://
-	% PrefixIsValid = true
-	% verkar som starts with on list returnerar fel
-	% !! EXCEPTION ERROR no match of right hand side value 
-	
+	%Remove valid prefix from text, return seperated
 	if (PrefixIsValid) ->
 		PrefixLen = string:len(TextMatchingPrefix),
 		ElemToRemove = min(PrefixLen+1,TextLen+1),
 		TextNew = string:substr(Text, ElemToRemove),
-		io:fwrite(Text),
-		io:fwrite("\n\n\n\n\n\n"),
-		io:fwrite(TextNew),
 		{TextMatchingPrefix, TextNew};
-	
 
-	% !! VERKAR FUNKA
    	%No prefix found remove first character
 	(not PrefixIsValid) ->
-%		io:fwrite("a"),
-
 		ElemToRemove = min(TextLen+1, 2),
-		TextNew =string:substr(Text, ElemToRemove),
+		TextNew = string:substr(Text, ElemToRemove),
 		{"", TextNew}
 	end.
 
@@ -122,9 +115,10 @@ find_remove_url_prefix(Text) ->
 %Returns substring if another string begins with it
 starts_with_on_list(String, [SubString | SubStrings]) ->
 
+	FoundMatch = starts_with(String, SubString),
+	
 	%There are multple substrings, search recursively before giving up
 	if (SubStrings /= []) ->
-		FoundMatch = starts_with(String, SubString),
 		if (FoundMatch) ->
 			SubString;
 		(not FoundMatch) ->
@@ -132,8 +126,7 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 		end;
 	
 	
-	(true) ->
-		FoundMatch = starts_with(String, SubString),
+	true ->
 		if (FoundMatch) ->
 			SubString;
 		   
@@ -147,9 +140,11 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 %Does string start with substring
 %Matches on available characters if string is smaller
 starts_with(String, SubString) ->
-	StringLen = string:len(String),
-	SubStringLen = string:len(SubString),
-	CharsLeft = min(StringLen,SubStringLen),
+	CharsLeft = min(string:len(String),string:len(SubString)),
+	
+	%Make same length
+	StringShort = string:substr(String, 1, string:len(SubString)),
+	SubStringShort = string:substr(SubString, 1, string:len(String)),
 
 	% Bad argument (empty list) 
 	if (CharsLeft < 1) ->
@@ -157,16 +152,16 @@ starts_with(String, SubString) ->
 
 	% Last char, all chars before were equal, compare and return
   	(CharsLeft == 1) ->
-		string:equals(String, SubString)
+		string:equal([StringShort], [SubStringShort]);
 	
 	% Compare char is equal, check next one if so
 	 (CharsLeft > 1) ->
-		[a|as] = String,
-		[b|bs] = SubString,
-		CharsEqual = string:equals(a,b),
+	   	[A|AS] = StringShort,
+		[B|BS] = SubStringShort,
+		CharsEqual = string:equal([A],[B]),
 
 		if(CharsEqual) ->
-		 	 starts_with(as,bs);
+		 	starts_with(AS,BS);
 		true ->
 			 false
 		end
@@ -193,15 +188,18 @@ get_site_body(Url) ->
 % Retry if GET request fails, until success or no tries left
 get_site_body_helper(Url, TriesLeft) ->
 	WaitAfterFail = 2000,
-	{Successful, {_, _, Body}} = httpc:request(Url),
+%	{Successful, {_, _, Body}} = httpc:request(Url),
+	GetReq = httpc:request(Url),
+	{Successful, _ } = GetReq,
 	
 	if (Successful == ok) ->
+		{_,{_,_, Body}} = GetReq,
 		Body;
 	(Successful /= ok) ->
+		io:fwrite("Cannot connect, retrying.. tries left: ~p \n", [TriesLeft-1]),
 		if(TriesLeft == 1) ->
-			erlang:error(http_timeout);	
+			erlang:error(timeout);	
 		true ->
-			io:fwrite("\nCannot connect, retrying.. tries left: ~p", TriesLeft-1),
 			timer:sleep(WaitAfterFail),
 			get_site_body_helper(Url,TriesLeft-1)
 		end
