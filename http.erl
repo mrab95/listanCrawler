@@ -43,8 +43,6 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			{Prefix, TextNew} = find_remove_url_prefix(Text),
 			IsUrl = not string:equal(Prefix, ""),
 		
-			%IsUrl blir inte true?
-			%find remove url prefix is broken?
 			if (IsUrl) ->
 				search_text_for_url(TextNew, Prefix, true);
 			(not IsUrl) ->
@@ -115,7 +113,7 @@ starts_with_on_list(String, [SubString | SubStrings]) ->
 	
 	
 	(true) ->
-		FoundMatch = starts_with(String, SubString), % I DONT WORK HERE
+		FoundMatch = starts_with(String, SubString),
 		if (FoundMatch) ->
 			SubString;
 		   
