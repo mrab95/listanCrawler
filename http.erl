@@ -40,6 +40,15 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 
 		  %look for valid URL prefix
 		(true) ->
+			try ({Prefix, TextNew} = find_remove_url_prefix(Text)),
+	
+			% !comment me please!
+			catch
+				error:badmatch -> hej.%We're done
+			
+				%{error, caught, badmatch}
+			end,
+
 			{Prefix, TextNew} = find_remove_url_prefix(Text),
 			IsUrl = not string:equal(Prefix, ""),
 		
@@ -92,7 +101,6 @@ find_remove_url_prefix(Text) ->
 		{TextMatchingPrefix, string:substr(Text, CharsToCompare)};
 	
 	%No prefix found remove first character
-	%do nothing if Text is empty
 	(true) ->
 		ElemToRemove = min(TextLen+1, 2),
 		{"",string:substr(Text, ElemToRemove)}
@@ -155,6 +163,14 @@ unallowed_char(Char) ->
 
 %Send HTTP GET request to server, return body
 get_site_body(Url) ->
-	inets:start(),
+	application:start(inets),
+%	inets:start(),
 	{ok, {_, _, Body}} = httpc:request(Url),
 	Body.
+
+
+
+%application:start(crypto),
+%application:start(public_key),
+%application:start(ssl),
+%application:start(inets)
