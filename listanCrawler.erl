@@ -36,12 +36,12 @@ search_site(Url) ->
 %Search text for URLs and return those 
 search_text_for_url(Text, CurrentURL, CurrentIsURL) ->	
 	
-	TextLen = string:len(Text),
-	if(TextLen < 1) ->
+	TextEmpty =  ((string:len(Text)) < 1),
+	if(TextEmpty) ->
 		  [];
 
-  	true ->
-		%maybe fails on text starting empty
+
+  	(not TextEmpty) ->
 		[NextChar | TextNew] = Text,
 		NextIsIllegal = unallowed_char(NextChar),
 		TextIsEmpty = string:equal(TextNew, ""),
@@ -61,7 +61,6 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			true ->
 	
 	% !! EXCEPTION ERROR no match of right hand side value !! 
-			
 			  	{Prefix, TextNew} = find_remove_url_prefix(Text),
 				IsUrl = not string:equal(Prefix, ""),
 		  
