@@ -89,9 +89,14 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			true ->	
 			  	{Prefix, TextNoPrefix} = find_remove_url_prefix(Text),
 				IsUrl = not string:equal(Prefix, ""),
-		  
+		 		
+			       	% URL found!
+				% Seperated prefix from text
 				if (IsUrl) ->
 					search_text_for_url(TextNoPrefix, Prefix, true);
+				
+				% Did NOT start with valid prefix
+				% First char removed from text
 				(not IsUrl) ->
 					search_text_for_url(TextNoPrefix, "", false)
 				end
@@ -112,7 +117,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			%Continuing adding to URL
 			(not NextIsIllegal) ->
 				if(TextIsEmpty) ->
-					  CurrentURL ++ NextChar; 
+					  CurrentURL ++ [NextChar]; 
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
