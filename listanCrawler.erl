@@ -17,11 +17,39 @@
 
 
 
-%list_to_binary(Body)
+
+
+% url_cleaner(URLs) ->
+% a url must have atleast one dot (.)
+% cannot begin or end with dot
+% might even look for known TLDs
+% probly strip prefix (http://, www.)
+% sort (which algoritm)
+
+
+% url_counter(URLs) ->
+% return [{URL,Occurances}]
+
+
+% url_search(Keywords) ->
+% eg ["youtube", ".com", ".de"]
+
+
+% search_whole_domain(URL) ->
+% recursive search all URLs found that leads to same domain
+% (can easy be implemented to allow searching recursively for any keyword, eg. visit all links containing "cats" in url)
+%
+% basic idea, probly bad.
+% for each: URL = url_search(URL)), search_site(URL) ++ search_whole_domain(URL)
+%
+% This would be a good time for concurrency/workers,
+% maybe send messages about URLs already searched
+
+
 
 main() ->
-	search_site("http://sweclockers.com/").
-
+	 URLs = search_site("http://sweclockers.com/"),
+	 io:fwrite(URLs).
 
 % Find all URLs on website
 search_site(Url) ->
@@ -58,16 +86,14 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 				end;
 
 			%look for valid URL prefix
-			true ->
-	
-	% !! EXCEPTION ERROR no match of right hand side value !! 
-			  	{Prefix, TextNew} = find_remove_url_prefix(Text),
+			true ->	
+			  	{Prefix, TextNoPrefix} = find_remove_url_prefix(Text),
 				IsUrl = not string:equal(Prefix, ""),
 		  
 				if (IsUrl) ->
-					search_text_for_url(TextNew, Prefix, true);
+					search_text_for_url(TextNoPrefix, Prefix, true);
 				(not IsUrl) ->
-					search_text_for_url(TextNew, "", false)
+					search_text_for_url(TextNoPrefix, "", false)
 				end
 			end;
 	
@@ -182,7 +208,8 @@ starts_with_this(String, SubString) ->
 
 
 
-%Is char allowed in URL
+% Is char allowed in URL
+% ! Needs additional work and whitelisted chars !
 unallowed_char(Char) ->
 	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=",
 	IllegalChar = not lists:member(Char, AllowedChars),
