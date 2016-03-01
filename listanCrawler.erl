@@ -16,8 +16,12 @@
 -include_lib ("kernel/include/inet.hrl").
 
 
-
-
+% Note url on same domain can be just /html/file.html
+% Similar //pic/picture.png
+%
+% So we look for / as prefix
+% This should be tagged as local in some way, and domain should be added
+% For example /pic/picture.png should be http://myDomain.com/pic/picture.png
 
 % url_cleaner(URLs) ->
 % a url must have atleast one dot (.)
@@ -26,6 +30,29 @@
 % probly strip prefix (http://, www.)
 % sort (which algoritm)
 
+% url_in_blacklist(URL) ->
+% load me from file please
+% blacklist some such as
+% jquery.min.js
+% jquery.js
+% /title
+% /css
+% .css
+% .js
+%
+
+% url_in_whitelist(URL) ->
+% load me from file please
+% if in whitelist mode, only accept these
+% .html .png .txt ..
+
+% url_fileEnding(URL) ->
+% if missing maybe assume html
+
+
+% is_url_scannable(URL) ->
+% is page scannable 
+% file ending .html .htm .txt ...
 
 % url_counter(URLs) ->
 % return [{URL,Occurances}]
@@ -33,6 +60,7 @@
 
 % url_search(Keywords) ->
 % eg ["youtube", ".com", ".de"]
+% or [".png", ".jpg"]
 
 
 % search_whole_domain(URL) ->
@@ -48,15 +76,14 @@
 
 
 main() ->
-	 URLs = search_site("http://sweclockers.com/"),
-	 io:fwrite(URLs).
+	URLs = search_site("http://sweclockers.com/"),
+	URLs.
 
 % Find all URLs on website
 search_site(Url) ->
 	Body = get_site_body(Url),
 	
 	UrlList =  search_text_for_url(Body, "", false),
-	io:fwrite(UrlList),
 	UrlList.
 
 
@@ -109,15 +136,15 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			%URL finished processing
 			if(NextIsIllegal) ->
 				if(TextIsEmpty) ->
-					CurrentURL;
+					[{CurrentURL, 1}];
 				(not TextIsEmpty) ->
-					CurrentURL ++ "\n" ++ search_text_for_url(TextNew, "", false)
+					 [{CurrentURL, 1}] ++ search_text_for_url(TextNew, "", false)
 				end;
 	
 			%Continuing adding to URL
 			(not NextIsIllegal) ->
 				if(TextIsEmpty) ->
-					  CurrentURL ++ [NextChar]; 
+					 [{(CurrentURL ++ [NextChar]), 1}]; 
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
@@ -131,9 +158,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 %Then remove that prefix otherwise only remove first char
 find_remove_url_prefix(Text) ->
 
-	% Order is relevant, we want to look for http:// before www.
-	% ! ADD HTTPS, more? !
-	ValidPrefix = ["http://", "https://" , "www."],
+	ValidPrefix = ["http://", "https://" , "www.", "/"],
 	TextLen = string:len(Text),
 	
 	%Valid if text starts with prefix
@@ -180,13 +205,14 @@ starts_with_these(String, [SubString | SubStrings]) ->
 	end.
 
 
-%Does string start with substring
-%Matches on available characters if string is smaller
+% Does string start with substring
+% Matches on available characters if string is smaller
+% Not case sensitive
 starts_with_this(String, SubString) ->
 	CharsLeft = min(string:len(String),string:len(SubString)),
 	
-	%Make same length
-	StringShort = string:substr(String, 1, string:len(SubString)),
+	% Make same length, make lowercase
+	StringShort = string:to_lower( string:substr(String, 1, string:len(SubString)) ),
 	SubStringShort = string:substr(SubString, 1, string:len(String)),
 
 	% Bad argument (empty list) 
@@ -216,7 +242,7 @@ starts_with_this(String, SubString) ->
 % Is char allowed in URL
 % ! Needs additional work and whitelisted chars !
 unallowed_char(Char) ->
-	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=",
+	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=åäöÅÄÖ",
 	IllegalChar = not lists:member(Char, AllowedChars),
 
 	IllegalChar.
