@@ -83,28 +83,32 @@
 
 
 main() ->
-	URLs = search_site_for_url("http://sweclockers.com/"),
+	URLs = search_site_for_url("http://sweclockers.cosm/"),
 	URLs.
 
 
+
 % ---------------------------
-%
-% a -> a 
+% search_site
+% String -> [String] -> [{String, Integer}]
 % ----
-% text
+% Search string, return hits and number of each hit found
 % ---------------------------
-% Find all URLs on website
-
-
-
 
 search_site(Url, Keywords) ->
 	Body = get_site_body(Url),
 	
-	UrlList =  search_text_for_url(Body, Keywords),
+	UrlList =  find_keywords_in_list(Body, Keywords),
 	UrlList.
 
 
+% ---------------------------
+% search_site_for_url
+% String -> [String] -> [{String, Integer}]
+% ----
+% Find all URLs on website, unique sites found
+% 	and how often they occured
+% ---------------------------
 search_site_for_url(Url) ->
 	URLprefix = ["http://", "https://" , "www.", "/"],
 	search_site(Url, URLprefix).
@@ -112,19 +116,22 @@ search_site_for_url(Url) ->
 
 
 % ---------------------------
-% search_text_for_url
+% find_keywords_in_list
 % String -> String -> String -> [{String, Integer}]
 % ----
-% Find every URL in string
+% Find every keyword in string
+% Case insensitive, keyword can be longer than string
+% If a character matches multiple keywords it will only return once
+% 	this may result in missed results.
 % ---------------------------
 
-search_text_for_url(Text, Keywords) ->
-	search_text_for_url(Text, "", false, Keywords).
+find_keywords_in_list(Text, Keywords) ->
+	find_keywords_in_list(Text, "", false, Keywords).
 
-search_text_for_url([], _, _, _) ->
+find_keywords_in_list([], _, _, _) ->
 	   [];
 
-search_text_for_url(Text, CurrentURL, CurrentIsURL, Keywords) ->	
+find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->	
 	[NextChar | TextNew] = Text,
 	NextIsIllegal = unallowed_char(NextChar),
 	TextIsEmpty = string:equal(TextNew, ""),
@@ -137,7 +144,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL, Keywords) ->
 			if(TextIsEmpty) ->
 				CurrentURL;
 			(not TextIsEmpty) ->
-				search_text_for_url(TextNew, "", false, Keywords)
+				find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
 
 		%look for valid URL prefix
@@ -148,12 +155,12 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL, Keywords) ->
 		       	% URL found!
 			% Seperated prefix from text
 			if (IsUrl) ->
-				search_text_for_url(TextNoPrefix, Prefix, true, Keywords);
+				find_keywords_in_list(TextNoPrefix, Prefix, true, Keywords);
 				
 			% Did NOT start with valid prefix
 			% First char removed from text
 			(not IsUrl) ->
-				search_text_for_url(TextNoPrefix, "", false, Keywords)
+				find_keywords_in_list(TextNoPrefix, "", false, Keywords)
 			end
 		end;
 	
@@ -165,7 +172,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL, Keywords) ->
 			if(TextIsEmpty) ->
 				[{CurrentURL, 1}];
 			(not TextIsEmpty) ->
-				 [{CurrentURL, 1}] ++ search_text_for_url(TextNew, "", false, Keywords)
+				 [{CurrentURL, 1}] ++ find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
 	
 		%Continuing adding to URL
@@ -174,14 +181,14 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL, Keywords) ->
 				 [{(CurrentURL ++ [NextChar]), 1}]; 
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
-					  search_text_for_url(TextNew, TmpURL, CurrentIsURL, Keywords)
+					  find_keywords_in_list(TextNew, TmpURL, CurrentIsURL, Keywords)
 			end
 		end
 	end.
 
 % ---------------------------
 % remove_prefixes
-% [A] -> [[A]] -> {[A], [A]} 
+% [String] -> [[String]] -> {[String], [String]} 
 % ----
 % ONLY WORKS FOR STRINGS RIGHT NOW
 % 
@@ -209,8 +216,8 @@ remove_prefixes(List, [Prefix|Prefixes]) ->
 
 
 % ---------------------------
-% remove_url_prefixes
-% [A] -> {[A], [A]} 
+% remove_prefix
+% [String] -> {[String], [String]} 
 % ----
 % ONLY WORKS FOR STRINGS RIGHT NOW
 %
@@ -273,10 +280,10 @@ get_site_body(Url) ->
 % Retry if GET request fails, until success or no tries left
 % ---------------------------
 get_site_body_helper(_, 0) ->
-	error:error(timeout);
+	erlang:error(timeout);
 
 get_site_body_helper(Url,TriesLeft) ->
-	WaitAfterFail = 10, %ms
+	WaitAfterFail = 1500, %ms
 	GetReq = httpc:request(Url),
 	{Response, _ } = GetReq,
 	
