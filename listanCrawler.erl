@@ -89,66 +89,61 @@ search_site(Url) ->
 
 
 %Search text for URLs and return those 
+search_text_for_url([], _, _) ->
+	   [];
+
 search_text_for_url(Text, CurrentURL, CurrentIsURL) ->	
 	
-	TextEmpty =  ((string:len(Text)) < 1),
-	if(TextEmpty) ->
-		  [];
+	[NextChar | TextNew] = Text,
+	NextIsIllegal = unallowed_char(NextChar),
+	TextIsEmpty = string:equal(TextNew, ""),
 
-
-  	(not TextEmpty) ->
-		[NextChar | TextNew] = Text,
-		NextIsIllegal = unallowed_char(NextChar),
-		TextIsEmpty = string:equal(TextNew, ""),
-
-		%look for start of valid URL
-		if (not CurrentIsURL) ->
+	%look for start of valid URL
+	if (not CurrentIsURL) ->
 			
-			%remove illegal char
-		   	if(NextIsIllegal) ->
-				if(TextIsEmpty) ->
-					CurrentURL;
-				(not TextIsEmpty) ->
-					search_text_for_url(TextNew, "", false)
-				end;
+		%remove illegal char
+	   	if(NextIsIllegal) ->
+			if(TextIsEmpty) ->
+				CurrentURL;
+			(not TextIsEmpty) ->
+				search_text_for_url(TextNew, "", false)
+			end;
 
-			%look for valid URL prefix
-			true ->	
-			  	{Prefix, TextNoPrefix} = find_remove_url_prefix(Text),
-				IsUrl = not string:equal(Prefix, ""),
-		 		
-			       	% URL found!
-				% Seperated prefix from text
-				if (IsUrl) ->
-					search_text_for_url(TextNoPrefix, Prefix, true);
+		%look for valid URL prefix
+		true ->	
+		  	{Prefix, TextNoPrefix} = find_remove_url_prefix(Text),
+			IsUrl = not string:equal(Prefix, ""),
+	 		
+		       	% URL found!
+			% Seperated prefix from text
+			if (IsUrl) ->
+				search_text_for_url(TextNoPrefix, Prefix, true);
 				
-				% Did NOT start with valid prefix
-				% First char removed from text
-				(not IsUrl) ->
-					search_text_for_url(TextNoPrefix, "", false)
-				end
+			% Did NOT start with valid prefix
+			% First char removed from text
+			(not IsUrl) ->
+				search_text_for_url(TextNoPrefix, "", false)
+			end
+	
+	
+	%We are in the middle of a URL
+	%continue adding to url until illegal char or EOF
+	true ->
+		%URL finished processing
+		if(NextIsIllegal) ->
+			if(TextIsEmpty) ->
+				[{CurrentURL, 1}];
+			(not TextIsEmpty) ->
+				 [{CurrentURL, 1}] ++ search_text_for_url(TextNew, "", false)
 			end;
 	
-	
-		%We are in the middle of a URL
-		%continue adding to url until illegal char or EOF
-		true ->
-			%URL finished processing
-			if(NextIsIllegal) ->
-				if(TextIsEmpty) ->
-					[{CurrentURL, 1}];
-				(not TextIsEmpty) ->
-					 [{CurrentURL, 1}] ++ search_text_for_url(TextNew, "", false)
-				end;
-	
-			%Continuing adding to URL
-			(not NextIsIllegal) ->
-				if(TextIsEmpty) ->
-					 [{(CurrentURL ++ [NextChar]), 1}]; 
+		%Continuing adding to URL
+		(not NextIsIllegal) ->
+		if(TextIsEmpty) ->
+				 [{(CurrentURL ++ [NextChar]), 1}]; 
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
-				end
 			end
 		end
 	end.
@@ -156,8 +151,15 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 
 %If Text starts with an url prefix (eg www. http://)
 %Then remove that prefix otherwise only remove first char
-find_remove_url_prefix(Text) ->
 
+% regex could be nice
+% gör detta på andra ställen med
+%find_remove_url_prefix([Head|Text], CurrentPrefix) ->
+%find_remove_url_prefix([], CurrentPrefix) ->
+%
+% ta bort textlen
+%
+find_remove_url_prefix(Text) ->
 	ValidPrefix = ["http://", "https://" , "www.", "/"],
 	TextLen = string:len(Text),
 	
