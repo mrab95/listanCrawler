@@ -74,11 +74,25 @@
 % maybe send messages about URLs already searched
 
 
+% ---------------------------
+% function
+% a -> a 
+% ----
+% text
+% ---------------------------
+
 
 main() ->
 	URLs = search_site("http://sweclockers.com/"),
 	URLs.
 
+
+% ---------------------------
+% function
+% a -> a 
+% ----
+% text
+% ---------------------------
 % Find all URLs on website
 search_site(Url) ->
 	Body = get_site_body(Url),
@@ -87,6 +101,13 @@ search_site(Url) ->
 	UrlList.
 
 
+
+% ---------------------------
+% function
+% a -> a 
+% ----
+% text
+% ---------------------------
 
 %Search text for URLs and return those 
 search_text_for_url([], _, _) ->
@@ -124,7 +145,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			(not IsUrl) ->
 				search_text_for_url(TextNoPrefix, "", false)
 			end
-	
+		end;
 	
 	%We are in the middle of a URL
 	%continue adding to url until illegal char or EOF
@@ -159,6 +180,14 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 %
 % ta bort textlen
 %
+
+
+% ---------------------------
+% function
+% a -> a 
+% ----
+% text
+% ---------------------------
 find_remove_url_prefix(Text) ->
 	ValidPrefix = ["http://", "https://" , "www.", "/"],
 	TextLen = string:len(Text),
@@ -182,34 +211,38 @@ find_remove_url_prefix(Text) ->
 	end.
 
 
-%Returns substring if another string begins with it
-starts_with_these(String, [SubString | SubStrings]) ->
 
+starts_with_these(_, []) ->
+	"";
+
+
+starts_with_these(String, [SubString | []]) ->
 	FoundMatch = starts_with_this(String, SubString),
+	if (FoundMatch) ->
+		 SubString;
+  	(not FoundMatch) ->	
+		""
+	end;		
+
 	
-	%There are multple substrings, search recursively before giving up
-	if (SubStrings /= []) ->
-		if (FoundMatch) ->
-			SubString;
-		(not FoundMatch) ->
-			starts_with_these(String, SubStrings)
-		end;
-	
-	
-	true ->
-		if (FoundMatch) ->
-			SubString;
-		   
-		% Not found return ""
-		(not FoundMatch) ->
-			""
-		end
+%There are multple substrings, search recursively before giving up
+starts_with_these(String, [SubString | SubStrings]) ->
+	FoundMatch = starts_with_this(String, SubString),
+	if (FoundMatch) ->
+		SubString;
+	(not FoundMatch) ->
+		starts_with_these(String, SubStrings)
 	end.
 
 
+% ---------------------------
+% starts_with_this
+% String -> String -> Boolean
+% ----
 % Does string start with substring
 % Matches on available characters if string is smaller
 % Not case sensitive
+% ---------------------------
 starts_with_this(String, SubString) ->
 	CharsLeft = min(string:len(String),string:len(SubString)),
 	
@@ -223,7 +256,7 @@ starts_with_this(String, SubString) ->
 
 	% Last char, all chars before were equal, compare and return
   	(CharsLeft == 1) ->
-		string:equal([StringShort], [SubStringShort]);
+	string:equal([StringShort], [SubStringShort]);
 	
 	% Compare char is equal, check next one if so
 	 (CharsLeft > 1) ->
@@ -241,6 +274,13 @@ starts_with_this(String, SubString) ->
 
 
 
+% ---------------------------
+% function
+% a -> a 
+% ----
+% text
+% ---------------------------
+
 % Is char allowed in URL
 % ! Needs additional work and whitelisted chars !
 unallowed_char(Char) ->
@@ -250,13 +290,29 @@ unallowed_char(Char) ->
 	IllegalChar.
 
 
-%Send HTTP GET request to server, return body
+
+% ---------------------------
+% get_site_body
+% String 
+% ----
+% Send HTTP GET request to server, return body
+% ---------------------------
 get_site_body(Url) ->
 	application:start(inets),
 	get_site_body_helper(Url, 10).
 
 
+
+% ---------------------------
+% get_site_body_helper
+% String -> Integer
+% ----
 % Retry if GET request fails, until success or no tries left
+% ---------------------------
+
+get_site_body_helper(_, 0) ->
+	errorlang:error(timeout);
+
 get_site_body_helper(Url, TriesLeft) ->
 	WaitAfterFail = 2000, %ms
 	GetReq = httpc:request(Url),
@@ -267,13 +323,9 @@ get_site_body_helper(Url, TriesLeft) ->
 		Body;
 
    	(Response /= ok) ->
-		io:fwrite("Cannot connect, retrying.. tries left: ~p \n", [TriesLeft-1]),
-		if(TriesLeft == 1) ->
-			erlang:error(timeout);	
-		true ->
-			timer:sleep(WaitAfterFail),
-			get_site_body_helper(Url,TriesLeft-1)
-		end
+		io:fwrite("Error: cannot connect\nRetrying.. tries left: ~p \n\n", [TriesLeft-1]),
+		timer:sleep(WaitAfterFail),
+		get_site_body_helper(Url,TriesLeft-1)
 	end.
 
 	
