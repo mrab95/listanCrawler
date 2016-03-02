@@ -16,6 +16,10 @@
 -include_lib ("kernel/include/inet.hrl").
 
 
+
+
+% ____________________ TODO & comments ________________________
+
 % Note url on same domain can be just /html/file.html
 % Similar //pic/picture.png
 %
@@ -72,27 +76,27 @@
 %
 % This would be a good time for concurrency/workers,
 % maybe send messages about URLs already searched
+% __________________________________________________
 
 
-% ---------------------------
-% function
-% a -> a 
-% ----
-% text
-% ---------------------------
-
-
+%Main
+%I'm just here for convenience
 main() ->
-	URLs = search_site_for_url("http://sweclockers.cosm/"),
-	URLs.
+	URLs = search_site_for_url("http://sweclockers.com/"),
+	io:fwrite(URLs).
+	%Result = clean_search_result(URLs),
+	%io:fwrite(Result).
 
+
+%% !! PROBLEM WE SAVE ALL URLS IN ONE LONG STRING ATM... !!
+%% can return as records/tuples, or maybe there's another way
 
 
 % ---------------------------
 % search_site
-% String -> [String] -> [{String, Integer}]
+% String -> [String] -> [String]
 % ----
-% Search string, return hits and number of each hit found
+% Search string, return hits 
 % ---------------------------
 
 search_site(Url, Keywords) ->
@@ -104,7 +108,7 @@ search_site(Url, Keywords) ->
 
 % ---------------------------
 % search_site_for_url
-% String -> [String] -> [{String, Integer}]
+% String -> [String] -> [String]
 % ----
 % Find all URLs on website, unique sites found
 % 	and how often they occured
@@ -114,10 +118,100 @@ search_site_for_url(Url) ->
 	search_site(Url, URLprefix).
 
 
+% ---------------------------
+% clean url, count
+
+
+%how does sort() work? Is there a more efficient way
+clean_search_result(URLs) ->
+	SortedURLs = lists:sort(URLs),
+	ValidURLs = remove_invalid_urls(SortedURLs),
+	URLFixedLocal = fix_local_urls(ValidURLs, "http://sweclockers.com"),
+	URLsCounted = count_each_url(URLFixedLocal),
+
+	SortedURLs.
+
+	
+
+%--------
+remove_invalid_urls([]) ->
+	[];
+remove_invalid_urls([URL|URLs]) ->
+	URLtooShort = (string:len(URL) < 6),
+	LastCharValid = string:equal([lists:last(URL)], "."),
+	[FirstChar | _] = URL,
+	FirstCharValid = string:equal([FirstChar], "."),
+	URLblacklisted = is_url_blacklisted(URL),
+
+	URLvalid = ((FirstCharValid and LastCharValid) and ((not URLtooShort) and (not URLblacklisted))),
+	
+	if (URLvalid)  ->
+		URL ++ remove_invalid_urls(URLs);
+	(not URLvalid) ->
+		remove_invalid_urls(URLs)
+	end.
+
+%---------
+is_url_blacklisted(URL) ->
+	%% maybe read from file
+	Blacklist = [".css",".js", "//Add", "//Don't", "adserver.adtech.de"],
+	is_url_blacklisted(URL, Blacklist).
+	
+is_url_blacklisted(URL, Blacklist) ->
+	(find_keywords_in_list(URL, Blacklist) /= []).
+
+%--------
+
+
+%!! put everything in record instead, add field "isLocal", "isScannable" ..? !!
+fix_local_urls([], _) ->
+	[];
+
+%!! remove '/' if domain ends with it !!
+fix_local_urls([URL | URLs], Domain) ->
+	[Head | _] = URL,
+	IsLocal = string:equal([Head], "/"),
+
+	if (IsLocal)  ->
+		[Domain++URL] ++ fix_local_urls(URLs, Domain);
+	(not IsLocal) ->
+		fix_local_urls(URLs, Domain)
+	end.
+
+
+
+
+%--------
+count_each_url(URLs) ->
+	count_each_url(URLs, 1).
+
+count_each_url([], _) ->
+	[];
+
+count_each_url([Url1 | []], Counter) ->
+	[{Url1, Counter}];
+
+
+count_each_url([URL1 | URLs], Counter) ->
+	[URL2 | _ ] = URLs,
+
+	FirstEqual = string:equal(URL1, URL2),
+
+	if(FirstEqual) ->
+		  count_each_url( (URLs) , (Counter+1));
+	(not FirstEqual) ->
+		[{URL1, Counter}] ++ count_each_url( (URLs) , 1)
+	end.
+
+
+
+
+
+
 
 % ---------------------------
 % find_keywords_in_list
-% String -> String -> String -> [{String, Integer}]
+% String -> String -> String -> [String]
 % ----
 % Find every keyword in string
 % Case insensitive, keyword can be longer than string
@@ -170,15 +264,15 @@ find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->
 		%URL finished processing
 		if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				[{CurrentURL, 1}];
+				[CurrentURL];
 			(not TextIsEmpty) ->
-				 [{CurrentURL, 1}] ++ find_keywords_in_list(TextNew, "", false, Keywords)
+				 [CurrentURL] ++ find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
 	
 		%Continuing adding to URL
 		(not NextIsIllegal) ->
 		if(TextIsEmpty) ->
-				 [{(CurrentURL ++ [NextChar]), 1}]; 
+				 [(CurrentURL ++ [NextChar])]; 
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  find_keywords_in_list(TextNew, TmpURL, CurrentIsURL, Keywords)
@@ -263,7 +357,7 @@ unallowed_char(Char) ->
 
 % ---------------------------
 % get_site_body
-% String 
+% String -> String 
 % ----
 % Send HTTP GET request to server, return body
 % ---------------------------
@@ -274,27 +368,39 @@ get_site_body(Url) ->
 
 % ---------------------------
 % get_site_body_helper
-% String -> Integer
+% String -> Integer -> Body
 % ----
 % Helper function
 % Retry if GET request fails, until success or no tries left
 % ---------------------------
-get_site_body_helper(_, 0) ->
-	erlang:error(timeout);
 
-get_site_body_helper(Url,TriesLeft) ->
-	WaitAfterFail = 1500, %ms
+get_site_body_helper(Url, TriesMax) ->
+	io:fwrite("\nDownloading HTML-page: ~s \n", [Url]),
+	get_site_body_helper(Url, TriesMax, TriesMax).
+
+get_site_body_helper(_, 0, _) ->
+	erlang:error(http_timeout);
+
+get_site_body_helper(Url,TriesLeft, TriesMax) ->
+	WaitAfterFail = 800, %ms
+	FirstRun = (TriesLeft == TriesMax),
 	GetReq = httpc:request(Url),
 	{Response, _ } = GetReq,
 	
 	if (Response == ok) ->
 		{_,{_,_, Body}} = GetReq,
+		io:fwrite("\nProcessing HTML-page: ~s \n\n", [Url]),
 		Body;
 
    	(Response /= ok) ->
-		io:fwrite("Error: cannot connect\nRetrying.. tries left: ~p \n\n", [TriesLeft-1]),
-		timer:sleep(WaitAfterFail),
-		get_site_body_helper(Url,TriesLeft-1)
+		if(FirstRun) ->
+			io:fwrite("\nProblem loading page: ~s \nRetrying.. \n", [Url]),
+			timer:sleep(WaitAfterFail),
+			get_site_body_helper(Url,TriesLeft-1, TriesMax);
+		(not FirstRun) ->
+			timer:sleep(WaitAfterFail),
+			get_site_body_helper(Url,TriesLeft-1, TriesMax)
+		end	
 	end.
 
 	
