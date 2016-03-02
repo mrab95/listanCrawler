@@ -11,7 +11,7 @@
 
 
 -module      (listanCrawler).
--export      ([main/0, search_site/1]).
+-export      ([main/0, search_site/2]).
 
 -include_lib ("kernel/include/inet.hrl").
 
@@ -83,38 +83,48 @@
 
 
 main() ->
-	URLs = search_site("http://sweclockers.com/"),
+	URLs = search_site_for_url("http://sweclockers.com/"),
 	URLs.
 
 
 % ---------------------------
-% function
+%
 % a -> a 
 % ----
 % text
 % ---------------------------
 % Find all URLs on website
-search_site(Url) ->
+
+
+
+
+search_site(Url, Keywords) ->
 	Body = get_site_body(Url),
 	
-	UrlList =  search_text_for_url(Body, "", false),
+	UrlList =  search_text_for_url(Body, Keywords),
 	UrlList.
 
 
+search_site_for_url(Url) ->
+	URLprefix = ["http://", "https://" , "www.", "/"],
+	search_site(Url, URLprefix).
+
+
 
 % ---------------------------
-% function
-% a -> a 
+% search_text_for_url
+% String -> String -> String -> [{String, Integer}]
 % ----
-% text
+% Find every URL in string
 % ---------------------------
 
-%Search text for URLs and return those 
-search_text_for_url([], _, _) ->
+search_text_for_url(Text, Keywords) ->
+	search_text_for_url(Text, "", false, Keywords).
+
+search_text_for_url([], _, _, _) ->
 	   [];
 
-search_text_for_url(Text, CurrentURL, CurrentIsURL) ->	
-	
+search_text_for_url(Text, CurrentURL, CurrentIsURL, Keywords) ->	
 	[NextChar | TextNew] = Text,
 	NextIsIllegal = unallowed_char(NextChar),
 	TextIsEmpty = string:equal(TextNew, ""),
@@ -127,23 +137,23 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			if(TextIsEmpty) ->
 				CurrentURL;
 			(not TextIsEmpty) ->
-				search_text_for_url(TextNew, "", false)
+				search_text_for_url(TextNew, "", false, Keywords)
 			end;
 
 		%look for valid URL prefix
 		true ->	
-		  	{Prefix, TextNoPrefix} = find_remove_url_prefix(Text),
+		  	{Prefix, TextNoPrefix} = remove_prefixes(Text, Keywords),
 			IsUrl = not string:equal(Prefix, ""),
 	 		
 		       	% URL found!
 			% Seperated prefix from text
 			if (IsUrl) ->
-				search_text_for_url(TextNoPrefix, Prefix, true);
+				search_text_for_url(TextNoPrefix, Prefix, true, Keywords);
 				
 			% Did NOT start with valid prefix
 			% First char removed from text
 			(not IsUrl) ->
-				search_text_for_url(TextNoPrefix, "", false)
+				search_text_for_url(TextNoPrefix, "", false, Keywords)
 			end
 		end;
 	
@@ -155,7 +165,7 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 			if(TextIsEmpty) ->
 				[{CurrentURL, 1}];
 			(not TextIsEmpty) ->
-				 [{CurrentURL, 1}] ++ search_text_for_url(TextNew, "", false)
+				 [{CurrentURL, 1}] ++ search_text_for_url(TextNew, "", false, Keywords)
 			end;
 	
 		%Continuing adding to URL
@@ -164,130 +174,83 @@ search_text_for_url(Text, CurrentURL, CurrentIsURL) ->
 				 [{(CurrentURL ++ [NextChar]), 1}]; 
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
-					  search_text_for_url(TextNew, TmpURL, CurrentIsURL)
+					  search_text_for_url(TextNew, TmpURL, CurrentIsURL, Keywords)
 			end
 		end
 	end.
 
+% ---------------------------
+% remove_prefixes
+% [A] -> [[A]] -> {[A], [A]} 
+% ----
+% ONLY WORKS FOR STRINGS RIGHT NOW
+% 
+% Look if a list starts with any of specified lists
+% If so, remove the first occurance and return seperated in a tuple.
+% Otherwise only remove first char and return {List, []}.
+% Not case sensitive, can return true even if search query is longer than the list
+% ---------------------------
 
-%If Text starts with an url prefix (eg www. http://)
-%Then remove that prefix otherwise only remove first char
+remove_prefixes([_|List], []) ->
+	{[], List};
+remove_prefixes([], _) ->
+	{[], []};
 
-% regex could be nice
-% gör detta på andra ställen med
-%find_remove_url_prefix([Head|Text], CurrentPrefix) ->
-%find_remove_url_prefix([], CurrentPrefix) ->
+remove_prefixes(List, [Prefix|Prefixes]) ->
+	Result = remove_prefix(List,Prefix),
+
+	case Result of
+		% Not found, try next prefix
+		{[], _} -> remove_prefixes(List, Prefixes);
+		
+		% Prefix found
+		_ -> Result
+	end.
+
+
+% ---------------------------
+% remove_url_prefixes
+% [A] -> {[A], [A]} 
+% ----
+% ONLY WORKS FOR STRINGS RIGHT NOW
 %
-% ta bort textlen
-%
-
-
+% Look if a list starts with another list.
+% If so, remove and return seperated in a tuple.
+% Otherwise remove first char instead and return togheter with empty list.
+% Not case sensitive, can return true even if search query is longer than the list.
 % ---------------------------
-% function
-% a -> a 
-% ----
-% text
-% ---------------------------
-find_remove_url_prefix(Text) ->
-	ValidPrefix = ["http://", "https://" , "www.", "/"],
-	TextLen = string:len(Text),
+remove_prefix(List, Result) ->
+	remove_prefix(List, Result, "").
+remove_prefix([], _, Result) ->
+	{Result, ""};
+remove_prefix(List, [], Result) ->
+	{Result,List};
+remove_prefix([HL|List], [HP|ValidPrefix], Result) ->
+	%not case sensitive
+	HLlower = string:to_lower(HL),
+	IsMatch = string:equal(HLlower,HP),
 	
-	%Valid if text starts with prefix
-	TextMatchingPrefix = starts_with_these(Text, ValidPrefix),	
-	PrefixIsValid = not string:equal(TextMatchingPrefix, ""),
-	
-	%Remove valid prefix from text, return seperated
-	if (PrefixIsValid) ->
-		PrefixLen = string:len(TextMatchingPrefix),
-		ElemToRemove = min(PrefixLen+1,TextLen+1),
-		TextNew = string:substr(Text, ElemToRemove),
-		{TextMatchingPrefix, TextNew};
-
-   	%No prefix found remove first character
-	(not PrefixIsValid) ->
-		ElemToRemove = min(TextLen+1, 2),
-		TextNew = string:substr(Text, ElemToRemove),
-		{"", TextNew}
+	if (IsMatch) ->
+		remove_prefix(List, ValidPrefix, Result ++ [HL]);
+	   (not IsMatch) ->
+		   {[], List}
 	end.
 
 
 
-starts_with_these(_, []) ->
-	"";
-
-
-starts_with_these(String, [SubString | []]) ->
-	FoundMatch = starts_with_this(String, SubString),
-	if (FoundMatch) ->
-		 SubString;
-  	(not FoundMatch) ->	
-		""
-	end;		
-
-	
-%There are multple substrings, search recursively before giving up
-starts_with_these(String, [SubString | SubStrings]) ->
-	FoundMatch = starts_with_this(String, SubString),
-	if (FoundMatch) ->
-		SubString;
-	(not FoundMatch) ->
-		starts_with_these(String, SubStrings)
-	end.
-
-
 % ---------------------------
-% starts_with_this
-% String -> String -> Boolean
+% unallowed_char
+% Char -> Boolean
 % ----
-% Does string start with substring
-% Matches on available characters if string is smaller
-% Not case sensitive
-% ---------------------------
-starts_with_this(String, SubString) ->
-	CharsLeft = min(string:len(String),string:len(SubString)),
-	
-	% Make same length, make lowercase
-	StringShort = string:to_lower( string:substr(String, 1, string:len(SubString)) ),
-	SubStringShort = string:substr(SubString, 1, string:len(String)),
-
-	% Bad argument (empty list) 
-	if (CharsLeft < 1) ->
-		false;
-
-	% Last char, all chars before were equal, compare and return
-  	(CharsLeft == 1) ->
-	string:equal([StringShort], [SubStringShort]);
-	
-	% Compare char is equal, check next one if so
-	 (CharsLeft > 1) ->
-	   	[A|AS] = StringShort,
-		[B|BS] = SubStringShort,
-		CharsEqual = string:equal([A],[B]),
-
-		if(CharsEqual) ->
-		 	starts_with_this(AS,BS);
-		true ->
-			 false
-		end
-	end.
-
-
-
-
-% ---------------------------
-% function
-% a -> a 
-% ----
-% text
+% Is character allowed in a url
 % ---------------------------
 
-% Is char allowed in URL
 % ! Needs additional work and whitelisted chars !
 unallowed_char(Char) ->
 	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=åäöÅÄÖ",
 	IllegalChar = not lists:member(Char, AllowedChars),
-
 	IllegalChar.
+
 
 
 
@@ -302,19 +265,18 @@ get_site_body(Url) ->
 	get_site_body_helper(Url, 10).
 
 
-
 % ---------------------------
 % get_site_body_helper
 % String -> Integer
 % ----
+% Helper function
 % Retry if GET request fails, until success or no tries left
 % ---------------------------
-
 get_site_body_helper(_, 0) ->
-	errorlang:error(timeout);
+	error:error(timeout);
 
-get_site_body_helper(Url, TriesLeft) ->
-	WaitAfterFail = 2000, %ms
+get_site_body_helper(Url,TriesLeft) ->
+	WaitAfterFail = 10, %ms
 	GetReq = httpc:request(Url),
 	{Response, _ } = GetReq,
 	
