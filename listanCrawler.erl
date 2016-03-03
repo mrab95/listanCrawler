@@ -14,8 +14,7 @@
 -export      ([main/0, search_site/2]).
 
 -include_lib ("kernel/include/inet.hrl").
-
-
+-record(url_info, {url, nr, isScannable, isLocal}).
 
 
 % ____________________ TODO & comments ________________________
@@ -82,9 +81,8 @@
 %Main
 %I'm just here for convenience
 main() ->
-	URLs = search_site_for_url("http://sweclockers.com/"),
-	io:fwrite(URLs).
-	%Result = clean_search_result(URLs),
+	URLs_info = search_site_for_url("http://sweclockers.com"),
+	URLs_info.
 	%io:fwrite(Result).
 
 
@@ -102,8 +100,9 @@ main() ->
 search_site(Url, Keywords) ->
 	Body = get_site_body(Url),
 	
-	UrlList =  find_keywords_in_list(Body, Keywords),
-	UrlList.
+	URLs_info = find_keywords_in_list(Body, Keywords),
+	CleanURLs_info = clean_search_result(CleanURLs_info),
+	URLs_info.
 
 
 % ---------------------------
@@ -123,7 +122,7 @@ search_site_for_url(Url) ->
 
 
 %how does sort() work? Is there a more efficient way
-clean_search_result(URLs) ->
+clean_search_result([#url_info{url = Url, nr = Nr, isScannable = IsScannable, isLocal = IsLocal}]) ->
 	SortedURLs = lists:sort(URLs),
 	ValidURLs = remove_invalid_urls(SortedURLs),
 	URLFixedLocal = fix_local_urls(ValidURLs, "http://sweclockers.com"),
@@ -163,7 +162,6 @@ is_url_blacklisted(URL, Blacklist) ->
 %--------
 
 
-%!! put everything in record instead, add field "isLocal", "isScannable" ..? !!
 fix_local_urls([], _) ->
 	[];
 
@@ -223,7 +221,7 @@ find_keywords_in_list(Text, Keywords) ->
 	find_keywords_in_list(Text, "", false, Keywords).
 
 find_keywords_in_list([], _, _, _) ->
-	   [];
+	#url_info{url = "", nr="", isScannable="", isLocal=""};
 
 find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->	
 	[NextChar | TextNew] = Text,
@@ -232,11 +230,11 @@ find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->
 
 	%look for start of valid URL
 	if (not CurrentIsURL) ->
-			
+
 		%remove illegal char
 	   	if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				CurrentURL;
+				#url_info{url = CurrentURL, nr="", isScannable="", isLocal=""};
 			(not TextIsEmpty) ->
 				find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
@@ -264,15 +262,16 @@ find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->
 		%URL finished processing
 		if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				[CurrentURL];
+				#url_info{url = CurrentURL, nr="", isScannable="", isLocal=""};
 			(not TextIsEmpty) ->
-				 [CurrentURL] ++ find_keywords_in_list(TextNew, "", false, Keywords)
+			[#url_info{url = (CurrentURL++[NextChar]), nr="", isScannable="", isLocal=""}]
+				  ++ find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
 	
 		%Continuing adding to URL
 		(not NextIsIllegal) ->
 		if(TextIsEmpty) ->
-				 [(CurrentURL ++ [NextChar])]; 
+				#url_info{url = (CurrentURL++[NextChar]), nr="", isScannable="", isLocal=""};
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  find_keywords_in_list(TextNew, TmpURL, CurrentIsURL, Keywords)
@@ -409,3 +408,5 @@ get_site_body_helper(Url,TriesLeft, TriesMax) ->
 %application:start(public_key),
 %application:start(ssl),
 %application:start(inets)
+	%io:fwrite(Result).
+
