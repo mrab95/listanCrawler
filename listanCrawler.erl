@@ -14,52 +14,25 @@
 -export      ([main/0, search_site/2]).
 
 -include_lib ("kernel/include/inet.hrl").
--record(url_info, {url, nr, isScannable, isLocal}).
+-record(url_info, {url, urlSearched, urlPrefix, nr, isScannable, isLocal}).
 
 
 % ____________________ TODO & comments ________________________
 
-% Note url on same domain can be just /html/file.html
-% Similar //pic/picture.png
-%
-% So we look for / as prefix
-% This should be tagged as local in some way, and domain should be added
-% For example /pic/picture.png should be http://myDomain.com/pic/picture.png
+% remove prefix and save in urlPrefix field, to get accurate counting
 
-% url_cleaner(URLs) ->
-% a url must have atleast one dot (.)
-% cannot begin or end with dot
-% might even look for known TLDs
-% probly strip prefix (http://, www.)
-% sort (which algoritm)
-
-% url_in_blacklist(URL) ->
-% load me from file please
-% blacklist some such as
-% jquery.min.js
-% jquery.js
-% /title
-% /css
-% .css
-% .js
-%
-
-% url_in_whitelist(URL) ->
+% url_in_whitelist(URL) ?
 % load me from file please
 % if in whitelist mode, only accept these
 % .html .png .txt ..
 
 % url_fileEnding(URL) ->
-% if missing maybe assume html
+% if missing assume html
 
 
 % is_url_scannable(URL) ->
 % is page scannable 
 % file ending .html .htm .txt ...
-
-% url_counter(URLs) ->
-% return [{URL,Occurances}]
-
 
 % url_search(Keywords) ->
 % eg ["youtube", ".com", ".de"]
@@ -86,10 +59,6 @@ main() ->
 	%io:fwrite(Result).
 
 
-%% !! PROBLEM WE SAVE ALL URLS IN ONE LONG STRING ATM... !!
-%% can return as records/tuples, or maybe there's another way
-
-
 % ---------------------------
 % search_site
 % String -> [String] -> [String]
@@ -97,12 +66,21 @@ main() ->
 % Search string, return hits 
 % ---------------------------
 
-search_site(Url, Keywords) ->
-	Body = get_site_body(Url),
+search_site(URLsearched, Keywords) ->
+	LastChar = lists:last(URLsearched),
+
+	% delete ending '/' from URL
+	if (LastChar == '/') ->
+	   search_site( (lists:droplast(URLsearched)) , Keywords );
 	
-	URLs_info = find_keywords_in_list(Body, Keywords),
-	CleanURLs_info = clean_search_result(CleanURLs_info),
-	URLs_info.
+	true ->
+	%	SiteBody = get_site_body(URLsearched),
+		SiteBody = " http://test.se www.apa.se www.apa.se http:apa.se",	
+		URLs_info1 = find_keywords_in_list(SiteBody, Keywords),
+		
+		URLs_info2 = clean_search_result(URLs_info1, URLsearched),
+		URLs_info2
+	end.
 
 
 % ---------------------------
@@ -112,9 +90,9 @@ search_site(Url, Keywords) ->
 % Find all URLs on website, unique sites found
 % 	and how often they occured
 % ---------------------------
-search_site_for_url(Url) ->
+search_site_for_url(URL) ->
 	URLprefix = ["http://", "https://" , "www.", "/"],
-	search_site(Url, URLprefix).
+	search_site(URL, URLprefix).
 
 
 % ---------------------------
@@ -123,42 +101,77 @@ search_site_for_url(Url) ->
 %!! use keyreplace to change values in record !!
 
 %how does sort() work? Is there a more efficient way
-clean_search_result([#url_info{url = Url, nr = Nr, isScannable = IsScannable, isLocal = IsLocal}]) ->
-	SortedURLs = lists:sort(URLs),
-	ValidURLs = remove_invalid_urls(SortedURLs),
-	URLFixedLocal = fix_local_urls(ValidURLs, "http://sweclockers.com"),
-	URLsCounted = count_each_url(URLFixedLocal),
+%clean_search_result(URLs = [#url_info{}], URLsearched) ->
+clean_search_result(URLs, URLsearched) ->
+	URLsClean1 = remove_invalid_urls(URLs),
+	URLsClean2 = fix_local_urls(URLsClean1, URLsearched),
+	
 
-	SortedURLs.
+	Sort_url_info = fun(R0, R1) ->
+		{R0#url_info.nr ,R0#url_info.url} < {R1#url_info.nr, R1#url_info.url} end,	
+
+	URLsClean3 = lists:sort(Sort_url_info, URLsClean2),
+	URLsClean4 = count_each_url(URLsClean3),
+
+	%I break, but why?
+	%URLsClean5 = lists:sort(Sort_url_info2, URLsClean4),
+	
+	URLsClean4.
 
 	
 
 %--------
 remove_invalid_urls([]) ->
 	[];
-remove_invalid_urls([URL|URLs]) ->
-	URLtooShort = (string:len(URL) < 6),
-	LastCharValid = string:equal([lists:last(URL)], "."),
-	[FirstChar | _] = URL,
-	FirstCharValid = string:equal([FirstChar], "."),
-	URLblacklisted = is_url_blacklisted(URL),
 
-	URLvalid = ((FirstCharValid and LastCharValid) and ((not URLtooShort) and (not URLblacklisted))),
+remove_invalid_urls([URL_info | URLs_info]) ->
+	URL = URL_info#url_info.url,
+	URLvalid = is_url_valid(URL),	
+	if (URLvalid)  ->
+		[URL_info] ++ remove_invalid_urls(URLs_info);
+	(not URLvalid) ->
+		remove_invalid_urls(URLs_info)
+	end;
+
+remove_invalid_urls(URL_info) ->
+	URL = URL_info#url_info.url,
+	URLvalid = is_url_valid(URL),
 	
 	if (URLvalid)  ->
-		URL ++ remove_invalid_urls(URLs);
+		[URL_info];
 	(not URLvalid) ->
-		remove_invalid_urls(URLs)
+		[]
 	end.
 
+%------
+
+is_url_valid([]) ->
+	false;
+
+is_url_valid(URL) ->
+	%NOTE urls with this ending will be REMOVED
+	% !! RATHER REMOVE THESE CHARS AND RECHECK IF VALID AGAIN !!
+	IllegalChars = " ;\":,>\\|",
+	
+	URLtooShort = (string:len(URL) < 6),
+	LastCharValid = not lists:member(lists:last(URL), IllegalChars),
+	URLblacklisted = is_url_blacklisted(URL),
+	
+	(LastCharValid and ((not URLtooShort) and (not URLblacklisted))).
+	
+
 %---------
+%
+%!! I just search start of text right...?  !!
 is_url_blacklisted(URL) ->
 	%% maybe read from file
-	Blacklist = [".css",".js", "//Add", "//Don't", "adserver.adtech.de"],
+	Blacklist = [".css",".js", ".ico", "script>", "javascript\"", "//m." , "rss+xml" , "//Add", "//Don't", "adserver.adtech.de"],
 	is_url_blacklisted(URL, Blacklist).
 	
 is_url_blacklisted(URL, Blacklist) ->
-	(find_keywords_in_list(URL, Blacklist) /= []).
+	TmpRecord = find_keywords_in_list(URL, Blacklist),
+	%empty if keyword not found, ie not in blacklist
+	(TmpRecord#url_info.url) /= [].
 
 %--------
 
@@ -166,18 +179,23 @@ is_url_blacklisted(URL, Blacklist) ->
 fix_local_urls([], _) ->
 	[];
 
-%!! remove '/' if domain ends with it !!
-fix_local_urls([URL | URLs], Domain) ->
-	[Head | _] = URL,
-	IsLocal = string:equal([Head], "/"),
-
+fix_local_urls([URLinfo | URLs], URLsearched) ->
+	URL = URLinfo#url_info.url,
+	[H | _] = URL,
+	IsLocal = string:equal([H], "/"), %(H == '/'),
 	if (IsLocal)  ->
-		[Domain++URL] ++ fix_local_urls(URLs, Domain);
+		[URLinfo#url_info{url = (URLsearched ++ URL), isLocal = true}] ++ fix_local_urls(URLs, URLsearched);
 	(not IsLocal) ->
-		fix_local_urls(URLs, Domain)
+		[URLinfo#url_info{isLocal = false}] ++ fix_local_urls(URLs, URLsearched)
 	end.
 
+%-----------
+%sort_url_info(R0, R1) ->
+%	R0nr = R0#url_info.nr,	
+%	R1nr = R1#url_info.nr,	
+%	R0nr < R1nr.
 
+%-------------
 
 
 %--------
@@ -187,19 +205,22 @@ count_each_url(URLs) ->
 count_each_url([], _) ->
 	[];
 
-count_each_url([Url1 | []], Counter) ->
-	[{Url1, Counter}];
+count_each_url([URLinfo | []], Counter) ->
+	URLinfo#url_info{nr = Counter};
 
 
-count_each_url([URL1 | URLs], Counter) ->
-	[URL2 | _ ] = URLs,
+count_each_url([URLinfo0 | URLs], Counter) ->
+	
+	[URLinfo1 | _ ] = URLs,
+	URL0 = URLinfo0#url_info.url,
+	URL1 = URLinfo1#url_info.url,
 
-	FirstEqual = string:equal(URL1, URL2),
+	FirstEqual = string:equal(URL0, URL1),
 
 	if(FirstEqual) ->
 		  count_each_url( (URLs) , (Counter+1));
 	(not FirstEqual) ->
-		[{URL1, Counter}] ++ count_each_url( (URLs) , 1)
+		[URLinfo0#url_info{nr = Counter}] ++ count_each_url(URLs, 1)
 	end.
 
 
@@ -222,7 +243,7 @@ find_keywords_in_list(Text, Keywords) ->
 	find_keywords_in_list(Text, "", false, Keywords).
 
 find_keywords_in_list([], _, _, _) ->
-	#url_info{url = "", nr="", isScannable="", isLocal=""};
+	#url_info{url=""};
 
 find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->	
 	[NextChar | TextNew] = Text,
@@ -235,7 +256,7 @@ find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->
 		%remove illegal char
 	   	if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = CurrentURL, nr="", isScannable="", isLocal=""};
+				#url_info{url = CurrentURL};
 			(not TextIsEmpty) ->
 				find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
@@ -263,16 +284,16 @@ find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->
 		%URL finished processing
 		if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = CurrentURL, nr="", isScannable="", isLocal=""};
+				#url_info{url = CurrentURL};
 			(not TextIsEmpty) ->
-			[#url_info{url = (CurrentURL++[NextChar]), nr="", isScannable="", isLocal=""}]
+			[#url_info{url = (CurrentURL++[NextChar])}]
 				  ++ find_keywords_in_list(TextNew, "", false, Keywords)
 			end;
 	
 		%Continuing adding to URL
 		(not NextIsIllegal) ->
 		if(TextIsEmpty) ->
-				#url_info{url = (CurrentURL++[NextChar]), nr="", isScannable="", isLocal=""};
+				#url_info{url = (CurrentURL++[NextChar])};
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  find_keywords_in_list(TextNew, TmpURL, CurrentIsURL, Keywords)
