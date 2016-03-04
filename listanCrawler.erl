@@ -120,6 +120,7 @@ search_site_for_url(Url) ->
 % ---------------------------
 % clean url, count
 
+%!! use keyreplace to change values in record !!
 
 %how does sort() work? Is there a more efficient way
 clean_search_result([#url_info{url = Url, nr = Nr, isScannable = IsScannable, isLocal = IsLocal}]) ->
