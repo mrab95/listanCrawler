@@ -224,7 +224,7 @@ count_each_url([URLinfo0 | URLs], Counter) ->
 
 %-----------------------
 
-%DO IT WORK?
+%DO I WORK?
 isScannable(FileType) ->
 	Scannables = [".txt", ".html", ".htm"],
 	lists:dropwhile( (strings:equal(FileType, lists:first(Scannables))), Scannables).
@@ -313,20 +313,17 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 			if(TextIsEmpty) ->
 				#url_info{url = CurrentURL};
 			(not TextIsEmpty) ->
-			[#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix}]
+				[#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix}]
 				  ++ text_to_url_records(TextNew, [], [], Keywords)
 			end;
 	
 		%Continuing adding to URL
 		(not NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix%-----------------------
-					 
-			
-					 };
+				#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix};
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
-					  text_to_url_records(TextNew, TmpURL, CurrentIsURL, Keywords)
+					  text_to_url_records(TextNew, TmpURL, Prefix, Keywords)
 			end
 		end
 	end.
@@ -340,14 +337,14 @@ remove_prefix(List, [Prefix | Prefixes]) ->
 	Match = lists:prefix(Prefix, List),
 
 	if(Match) ->
-		  remove_prefix(List, Prefixes);
-	(not Match) ->
 		ListNoPrefix = string:substr(List, (length(Prefix)+1), length(List)),
-		{ListNoPrefix, List}
-	end;
+		{ListNoPrefix, Prefix};
+	(not Match) ->
+		remove_prefix(List, Prefixes)
+	end.
 
-remove_prefix(List, Prefix) ->
-	remove_prefix(List, [Prefix]).
+%remove_prefix(List, Prefix) ->
+%	remove_prefix(List, [Prefix]).
 
 %-------------
 
@@ -358,14 +355,14 @@ remove_suffix(List, [Suffix | Suffixes]) ->
 	Match = lists:suffix(Suffix, List),
 
 	if(Match) ->
-		  remove_suffix(List, Suffixes);
-	(not Match) ->
 		ListNoSuffix = string:substr(List, 1, length(List)-length(Suffix)),
-		{ListNoSuffix, Suffix}
-	end;
+		{ListNoSuffix, Suffix};
+	(not Match) ->
+		remove_suffix(List, Suffixes)
+	end.
 
-remove_suffix(List, Suffix) ->
-	remove_suffix(List, [Suffix]).
+%remove_suffix(List, Suffix) ->
+%	remove_suffix(List, [Suffix]).
 
 %-------------
 
