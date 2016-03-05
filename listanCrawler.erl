@@ -14,7 +14,7 @@
 -export      ([main/0, search_site/2]).
 
 -include_lib ("kernel/include/inet.hrl").
--record(url_info, {prefix, url, suffix, urlSearched, nr, isScannable, isLocal}).
+-record(url_info, {prefix, url, filetype, urlSearched, nr, fix_filetype, isLocal}).
 
 
 % ____________________ TODO & comments ________________________
@@ -40,12 +40,19 @@
 % maybe send messages about URLs already searched
 % __________________________________________________
 
+% !!! Issues !!!
+% as we try to match '/' as valid start of url
+% we get a lot of false positives
+% need more checking for this
+% ------------------------------
+
+
 
 %Main
 %I'm just here for convenience
 main() ->
-	URLs_info = search_site_for_url("http://sweclockers.com"),
-	URLs_info.
+	URLsInfo = search_site_for_url("http://sweclockers.com"),
+	URLsInfo.
 	%io:fwrite(Result).
 
 
@@ -56,6 +63,10 @@ main() ->
 % Search string, return hits 
 % ---------------------------
 
+
+
+
+
 search_site(URLsearched, Keywords) ->
 	LastChar = lists:last(URLsearched),
 
@@ -64,18 +75,13 @@ search_site(URLsearched, Keywords) ->
 	   search_site( (lists:droplast(URLsearched)) , Keywords );
 	
 	true ->
-	%	SiteBody = get_site_body(URLsearched),
-		SiteBody = " http://tesTeTet.se www.apa.se www.apa.se http:apa.se /index.html",	
-		URLs_info1 = text_to_url_records(SiteBody, Keywords),
-		
-		%
+		SiteBody = get_site_body(URLsearched),
+	%	SiteBody = "http://tesTeTet.se www.apa.se www.apa.se http:apa.se/a.html www.index.html www.ala.se. www.als.js",	
+		URLsInfo1 = text_to_url_records(SiteBody, Keywords),
 		
 
-		
-		%
-
-		%URLs_info2 = clean_search_result(URLs_info1, URLsearched),
-		URLs_info1
+		URLsInfo2 = clean_search_result(URLsInfo1, URLsearched),
+		URLsInfo2
 	end.
 
 
@@ -100,19 +106,20 @@ search_site_for_url(URL) ->
 %clean_search_result(URLs = [#url_info{}], URLsearched) ->
 clean_search_result(URLs, URLsearched) ->
 	URLsClean1 = remove_invalid_urls(URLs),
-	URLsClean2 = fix_local_urls(URLsClean1, URLsearched),
+	URLsClean2 = set_urlSearched(URLsClean1, URLsearched),
+	URLsClean3 = fix_local_urls(URLsClean2),
 	
 
 	Sort_url_info = fun(R0, R1) ->
 		{R0#url_info.nr ,R0#url_info.url} < {R1#url_info.nr, R1#url_info.url} end,	
 
-	URLsClean3 = lists:sort(Sort_url_info, URLsClean2),
-	URLsClean4 = count_each_url(URLsClean3),
-
+	URLsClean4 = lists:sort(Sort_url_info, URLsClean3),
+	URLsClean5 = count_each_url(URLsClean4),
+	URLsClean6 = fix_filetype(URLsClean5),
 	%I break, but why?
 	%URLsClean5 = lists:sort(Sort_url_info2, URLsClean4),
 	
-	URLsClean4.
+	URLsClean6.
 
 	
 
@@ -120,28 +127,29 @@ clean_search_result(URLs, URLsearched) ->
 remove_invalid_urls([]) ->
 	[];
 
-remove_invalid_urls([URL_info | URLs_info]) ->
-	URL = URL_info#url_info.url,
+remove_invalid_urls([URLInfo | URLsInfo]) ->
+	URL = URLInfo#url_info.url,
 	URLvalid = is_url_valid(URL),	
 	if (URLvalid)  ->
-		[URL_info] ++ remove_invalid_urls(URLs_info);
+		[URLInfo] ++ remove_invalid_urls(URLsInfo);
 	(not URLvalid) ->
-		remove_invalid_urls(URLs_info)
+		remove_invalid_urls(URLsInfo)
 	end;
 
-remove_invalid_urls(URL_info) ->
-	URL = URL_info#url_info.url,
+remove_invalid_urls(URLInfo) ->
+	URL = URLInfo#url_info.url,
 	URLvalid = is_url_valid(URL),
 	
 	if (URLvalid)  ->
-		[URL_info];
+		[URLInfo];
 	(not URLvalid) ->
 		[]
 	end.
 
 %------
 
-%Note argument is url without prefix
+% Removes last character until valid
+% Check if blacklisted
 
 is_url_valid([]) ->
 	false;
@@ -150,15 +158,18 @@ is_url_valid(undefined) ->
 	false;
 
 is_url_valid(URL) ->
-	%NOTE urls with this ending will be REMOVED
-	% !! RATHER REMOVE THESE CHARS AND RECHECK IF VALID AGAIN !!
-	IllegalChars = " ;\":,>\\|",
+	IllegalChars = " ;\":,>\\|.",
 	
 	URLtooShort = (length(URL) < 4),
 	LastCharValid = not lists:member(lists:last(URL), IllegalChars),
-	URLblacklisted = is_url_blacklisted(URL),
-	
-	(LastCharValid and ((not URLtooShort) and (not URLblacklisted))).
+
+	if LastCharValid ->
+		URLblacklisted = is_url_blacklisted(URL),	
+		(LastCharValid and ((not URLtooShort) and (not URLblacklisted)));
+	(not LastCharValid) ->
+		[_ | AS] = URL,
+		is_url_valid(AS)
+	end.
 	
 
 %---------
@@ -182,19 +193,24 @@ is_url_blacklisted(URL, Blacklist) ->
 %--------
 
 
-fix_local_urls([], _) ->
+fix_local_urls([]) ->
 	[];
 
-fix_local_urls([URLinfo | URLs], URLsearched) ->
-	URL = URLinfo#url_info.url,
-	[H | _] = URL,
-	IsLocal = string:equal([H], "/"), %(H == '/'),
-	if (IsLocal)  ->
-		[URLinfo#url_info{url = (URLsearched ++ URL), isLocal = true}] ++ fix_local_urls(URLs, URLsearched);
-	(not IsLocal) ->
-		[URLinfo#url_info{isLocal = false}] ++ fix_local_urls(URLs, URLsearched)
-	end.
+fix_local_urls([URLInfo | URLs]) ->
+	Prefix = URLInfo#url_info.prefix,
+	URLsearched = URLInfo#url_info.urlSearched,
 
+	if ((Prefix == undefined) or (URLsearched == undefined)) ->
+		[URLInfo#url_info{isLocal = false}] ++ fix_local_urls(URLs);
+	
+	true ->
+		IsLocal = lists:prefix("/", Prefix),
+		if (IsLocal)  ->
+			[URLInfo#url_info{prefix = (URLsearched ++ "/"), isLocal = true}] ++ fix_local_urls(URLs);
+		(not IsLocal) ->
+			[URLInfo#url_info{isLocal = false}] ++ fix_local_urls(URLs)
+		end
+	end.
 
 
 %--------
@@ -205,44 +221,57 @@ count_each_url(URLs) ->
 count_each_url([], _) ->
 	[];
 
-count_each_url([URLinfo | []], Counter) ->
-	URLinfo#url_info{nr = Counter};
+count_each_url([URLInfo | []], Counter) ->
+	URLInfo#url_info{nr = Counter};
 
-count_each_url([URLinfo0 | URLs], Counter) ->
+count_each_url([URLInfo0 | URLs], Counter) ->
 	
-	[URLinfo1 | _ ] = URLs,
-	URL0 = URLinfo0#url_info.url,
-	URL1 = URLinfo1#url_info.url,
+	[URLInfo1 | _ ] = URLs,
+	URL0 = URLInfo0#url_info.url,
+	URL1 = URLInfo1#url_info.url,
 
 	FirstEqual = string:equal(URL0, URL1),
 
 	if(FirstEqual) ->
 		  count_each_url( (URLs) , (Counter+1));
 	(not FirstEqual) ->
-		[URLinfo0#url_info{nr = Counter}] ++ count_each_url(URLs, 1)
+		[URLInfo0#url_info{nr = Counter}] ++ count_each_url(URLs, 1)
 	end.
 
 %-----------------------
 
-%DO I WORK?
-isScannable(FileType) ->
+
+fix_filetype([]) ->
+	[];
+
+fix_filetype([URLInfo | URLsInfo]) ->
+	URL = URLInfo#url_info.url,
 	Scannables = [".txt", ".html", ".htm"],
-	lists:dropwhile( (strings:equal(FileType, lists:first(Scannables))), Scannables).
+	NonScannables = [".png", ".jpg", "jpeg", ".svg", ".gif", ".webm", ".mp4", ".mp3"],
 
-%-----------------------
-seperate_url_file_ending(URLinfo) ->
-	FileTypes = [".txt", ".html", ".png"],
-	URL = URLinfo#url_info.url, Prefix = URLinfo#url_info.prefix,
-	Local = URLinfo#url_info.isLocal, Searched = URLinfo#url_info.urlSearched,
+	{NewURL0, Suffix0} = remove_suffix(URL, Scannables),
+	Scannable = (Suffix0 /= []),
+	
+	if Scannable ->
+		[URLInfo#url_info{url = NewURL0, filetype = Suffix0, fix_filetype = Scannable}] ++ fix_filetype(URLsInfo);
+	(not Scannable) ->
+		{NewURL1, Suffix1} = remove_suffix(URL, NonScannables),
+		[URLInfo#url_info{url = NewURL1, filetype = Suffix1, fix_filetype = false}] ++ fix_filetype(URLsInfo)
+	end;
 
-	{NewURL, Suffix} = remove_suffix(URL, FileTypes),
-	Scannable = isScannable(Suffix),
-	#url_info{prefix = Prefix, url = NewURL, isLocal = Local, urlSearched = Searched, isScannable = Scannable, suffix = Suffix}.
+fix_filetype(URLInfo) ->
+	fix_filetype([URLInfo]).
 
+%------------------------
 
+set_urlSearched([], _) ->
+	[];
 
+set_urlSearched([URLInfo | URLsInfo], URLsearched) ->
+	[URLInfo#url_info{urlSearched = URLsearched}] ++ set_urlSearched(URLsInfo, URLsearched);
 
-
+set_urlSearched(URLInfo, URLsearched) ->
+	set_urlSearched([URLInfo], URLsearched).
 
 
 
@@ -301,7 +330,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 			% Did NOT start with valid prefix
 			% First char removed from text
 			(not IsUrl) ->
-				text_to_url_records(TextNoPrefix, [], [], Keywords)
+				text_to_url_records(TextNew, [], [], Keywords)
 			end
 		end;
 	
@@ -313,7 +342,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 			if(TextIsEmpty) ->
 				#url_info{url = CurrentURL};
 			(not TextIsEmpty) ->
-				[#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix}]
+				[#url_info{url = (CurrentURL), prefix = Prefix}]
 				  ++ text_to_url_records(TextNew, [], [], Keywords)
 			end;
 	
@@ -322,8 +351,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 			if(TextIsEmpty) ->
 				#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix};
 				(not TextIsEmpty) ->
-					  TmpURL = CurrentURL ++ [NextChar],
-					  text_to_url_records(TextNew, TmpURL, Prefix, Keywords)
+					  text_to_url_records(TextNew, (CurrentURL++[NextChar]), Prefix, Keywords)
 			end
 		end
 	end.
@@ -342,6 +370,9 @@ remove_prefix(List, [Prefix | Prefixes]) ->
 	(not Match) ->
 		remove_prefix(List, Prefixes)
 	end.
+
+%remove_prefix(List, _) ->
+%	{List, []}.
 
 %remove_prefix(List, Prefix) ->
 %	remove_prefix(List, [Prefix]).
