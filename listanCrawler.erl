@@ -19,20 +19,10 @@
 
 % ____________________ TODO & comments ________________________
 
-% remove prefix and save in prefix field, to get accurate counting
-
 % url_in_whitelist(URL) ?
 % load me from file please
 % if in whitelist mode, only accept these
 % .html .png .txt ..
-
-% url_fileEnding(URL) ->
-% if missing assume html
-
-
-% is_url_scannable(URL) ->
-% is page scannable 
-% file ending .html .htm .txt ...
 
 % url_search(Keywords) ->
 % eg ["youtube", ".com", ".de"]
@@ -180,9 +170,14 @@ is_url_blacklisted(URL) ->
 	is_url_blacklisted(URL, Blacklist).
 	
 is_url_blacklisted(URL, Blacklist) ->
-	TmpRecord = text_to_url_records(URL, Blacklist),
-	%empty if keyword not found, ie not in blacklist
-	(TmpRecord#url_info.url) /= [].
+	{_, Prefix} = remove_prefix(URL, Blacklist),
+	{_, Suffix} = remove_suffix(URL, Blacklist),
+	
+	if((Suffix == []) and (Prefix == [])) ->
+		false;
+	true ->
+		true
+	end. 
 
 %--------
 
@@ -200,16 +195,10 @@ fix_local_urls([URLinfo | URLs], URLsearched) ->
 		[URLinfo#url_info{isLocal = false}] ++ fix_local_urls(URLs, URLsearched)
 	end.
 
-%-----------
-%sort_url_info(R0, R1) ->
-%	R0nr = R0#url_info.nr,	
-%	R1nr = R1#url_info.nr,	
-%	R0nr < R1nr.
-
-%-------------
 
 
 %--------
+%AND REMOVES DUPLICATES
 count_each_url(URLs) ->
 	count_each_url(URLs, 1).
 
@@ -218,7 +207,6 @@ count_each_url([], _) ->
 
 count_each_url([URLinfo | []], Counter) ->
 	URLinfo#url_info{nr = Counter};
-
 
 count_each_url([URLinfo0 | URLs], Counter) ->
 	
@@ -234,14 +222,9 @@ count_each_url([URLinfo0 | URLs], Counter) ->
 		[URLinfo0#url_info{nr = Counter}] ++ count_each_url(URLs, 1)
 	end.
 
-
-
-% ------------------------
-reverse_each([A | AS]) ->
-	[lists:reverse(A)] ++ reverse_each(AS).
-
 %-----------------------
 
+%DO IT WORK?
 isScannable(FileType) ->
 	Scannables = [".txt", ".html", ".htm"],
 	lists:dropwhile( (strings:equal(FileType, lists:first(Scannables))), Scannables).
@@ -252,7 +235,7 @@ seperate_url_file_ending(URLinfo) ->
 	URL = URLinfo#url_info.url, Prefix = URLinfo#url_info.prefix,
 	Local = URLinfo#url_info.isLocal, Searched = URLinfo#url_info.urlSearched,
 
-	{Suffix, NewURL} = remove_suffixes(URL, FileTypes),
+	{NewURL, Suffix} = remove_suffix(URL, FileTypes),
 	Scannable = isScannable(Suffix),
 	#url_info{prefix = Prefix, url = NewURL, isLocal = Local, urlSearched = Searched, isScannable = Scannable, suffix = Suffix}.
 
@@ -308,7 +291,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 
 		%look for valid URL prefix
 		true ->	
-		  	{PrefixNew, TextNoPrefix} = remove_prefixes(Text, Keywords),
+		  	{TextNoPrefix, PrefixNew} = remove_prefix(Text, Keywords),
 			IsUrl = (PrefixNew /= []),
 		       	% URL found!
 			% Seperated prefix from text
@@ -348,124 +331,44 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		end
 	end.
 
-% ---------------------------
-% remove_prefixes
-% [String] -> [[String]] -> {[String], [String]} 
-% ----
-% ONLY WORKS FOR STRINGS RIGHT NOW
-% 
-% Look if a list starts with any of specified lists
-% If so, remove the first occurance and return seperated in a tuple.
-% Otherwise only remove first char and return {List, []}.
-% Not case sensitive, can return true even if search query is longer than the list
-% ---------------------------
-
-remove_prefixes([_|List], []) ->
-	{[], List};
-remove_prefixes([], _) ->
-	{[], []};
-
-remove_prefixes(List, [Prefix|Prefixes]) ->
-	Result = remove_prefix(List,Prefix),
-
-	case Result of
-		% Not found, try next prefix
-		{[], _} -> remove_prefixes(List, Prefixes);
-		
-		% Prefix found
-		_ -> Result
-	end.
-
-
-% ---------------------------
-% remove_prefix
-% [String] -> {[String], [String]} 
-% ----
-% ONLY WORKS FOR STRINGS RIGHT NOW
-%
-% Look if a list starts with another list.
-% If so, remove and return seperated in a tuple.
-% Otherwise remove first char instead and return togheter with empty list.
-% Not case sensitive, can return true even if search query is longer than the list.
-% ---------------------------
-remove_prefix(List, Result) ->
-	remove_prefix(List, Result, []).
-remove_prefix([], _, Result) ->
-	{Result, []};
-remove_prefix(List, [], Result) ->
-	{Result,List};
-remove_prefix([HL|List], [HP|ValidPrefix], Result) ->
-	%not case sensitive
-	HLlower = string:to_lower(HL),
-	IsMatch = string:equal(HLlower,HP),
-	
-	if (IsMatch) ->
-		remove_prefix(List, ValidPrefix, Result ++ [HL]);
-	   (not IsMatch) ->
-		   {[], List}
-	end.
-
-
 %---------------
-remove_suffixes(List, Suffixes) ->
-	MaxLen = get_longest(Suffixes),
-	ListLen = length(list),
-	PartToCheck = string:substr(List, ListLen-MaxLen-1, ListLen),
-	
-	{ListNoSuffix, Suffix} = remove_suffixes_help(PartToCheck, Suffixes),
-	
-	if(Suffix == []) ->
-		{List, []};
-	true ->
-		{Suffix, ListNoSuffix}
-	end.
 
-remove_suffixes_help([_|List], []) ->
-	{[], List};
-remove_suffixes_help([], _) ->
-	{[], []};
+remove_prefix(List, []) ->
+	{List, []};
 
-remove_suffixes_help(List, [Suffix|Suffixes]) ->
-	Result = remove_suffix(List,Suffix),
+remove_prefix(List, [Prefix | Prefixes]) ->
+	Match = lists:prefix(Prefix, List),
 
-	case Result of
-		% Not found, try next suffix
-		{[], _} -> remove_suffixes_help(List, Suffixes);
-		
-		% Suffix found
-		_ -> Result
-	end.
+	if(Match) ->
+		  remove_prefix(List, Prefixes);
+	(not Match) ->
+		ListNoPrefix = string:substr(List, (length(Prefix)+1), length(List)),
+		{ListNoPrefix, List}
+	end;
 
-%--------------
-remove_suffix(List, Result) ->
-	remove_suffix(List, Result, []).
-remove_suffix([], _, Result) ->
-	{Result, []};
-remove_suffix(List, [], Result) ->
-	{Result,List};
-remove_suffix([HL|List], [HP|ValidSuffix], Result) ->
-	%not case sensitive
-	HLlower = string:to_lower(HL),
-	IsMatch = string:equal(HLlower,HP),
-	
-	if (IsMatch) ->
-		remove_suffix(List, ValidSuffix, Result ++ [HL]);
-	   (not IsMatch) ->
-		   {[], List}
-	end.
+remove_prefix(List, Prefix) ->
+	remove_prefix(List, [Prefix]).
 
 %-------------
 
-get_longest(A) ->
-	get_longest(A, 0).
+remove_suffix(List, []) ->
+	{List, []};
 
-get_longest([A | AS], Length) ->
-	MaxLen = max(length(A), Length),
-	get_longest(AS, MaxLen).
+remove_suffix(List, [Suffix | Suffixes]) ->
+	Match = lists:suffix(Suffix, List),
 
-%----------------
-%
-%
+	if(Match) ->
+		  remove_suffix(List, Suffixes);
+	(not Match) ->
+		ListNoSuffix = string:substr(List, 1, length(List)-length(Suffix)),
+		{ListNoSuffix, Suffix}
+	end;
+
+remove_suffix(List, Suffix) ->
+	remove_suffix(List, [Suffix]).
+
+%-------------
+
 
 % ---------------------------
 % unallowed_char
@@ -473,8 +376,8 @@ get_longest([A | AS], Length) ->
 % ----
 % Is character allowed in a url
 % ---------------------------
-
 % ! Needs additional work and whitelisted chars !
+
 unallowed_char(Char) ->
 	AllowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=åäöÅÄÖ",
 	IllegalChar = not lists:member(Char, AllowedChars),
