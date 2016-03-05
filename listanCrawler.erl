@@ -14,12 +14,12 @@
 -export      ([main/0, search_site/2]).
 
 -include_lib ("kernel/include/inet.hrl").
--record(url_info, {url, urlSearched, urlPrefix, nr, isScannable, isLocal}).
+-record(url_info, {prefix, url, urlSearched, nr, isScannable, isLocal}).
 
 
 % ____________________ TODO & comments ________________________
 
-% remove prefix and save in urlPrefix field, to get accurate counting
+% remove prefix and save in prefix field, to get accurate counting
 
 % url_in_whitelist(URL) ?
 % load me from file please
@@ -75,9 +75,9 @@ search_site(URLsearched, Keywords) ->
 	
 	true ->
 	%	SiteBody = get_site_body(URLsearched),
-		SiteBody = " http://test.se www.apa.se www.apa.se http:apa.se",	
+		SiteBody = " http://testetet.se www.apa.se www.apa.se http:apa.se /index.html",	
 		URLs_info1 = find_keywords_in_list(SiteBody, Keywords),
-		
+			
 		URLs_info2 = clean_search_result(URLs_info1, URLsearched),
 		URLs_info2
 	end.
@@ -145,7 +145,12 @@ remove_invalid_urls(URL_info) ->
 
 %------
 
+%Note argument is url without prefix
+
 is_url_valid([]) ->
+	false;
+
+is_url_valid(undefined) ->
 	false;
 
 is_url_valid(URL) ->
@@ -153,7 +158,7 @@ is_url_valid(URL) ->
 	% !! RATHER REMOVE THESE CHARS AND RECHECK IF VALID AGAIN !!
 	IllegalChars = " ;\":,>\\|",
 	
-	URLtooShort = (string:len(URL) < 6),
+	URLtooShort = (length(URL) < 4),
 	LastCharValid = not lists:member(lists:last(URL), IllegalChars),
 	URLblacklisted = is_url_blacklisted(URL),
 	
@@ -239,42 +244,44 @@ count_each_url([URLinfo0 | URLs], Counter) ->
 % 	this may result in missed results.
 % ---------------------------
 
+% !! returns a undefined url_info record too much
+
 find_keywords_in_list(Text, Keywords) ->
-	find_keywords_in_list(Text, "", false, Keywords).
+	find_keywords_in_list(Text, [], [], Keywords).
 
 find_keywords_in_list([], _, _, _) ->
-	#url_info{url=""};
+	#url_info{};
 
-find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->	
+find_keywords_in_list(Text, CurrentURL, Prefix, Keywords) ->	
 	[NextChar | TextNew] = Text,
 	NextIsIllegal = unallowed_char(NextChar),
-	TextIsEmpty = string:equal(TextNew, ""),
-
+	TextIsEmpty = (TextNew == []),
+	CurrentIsURL = (Prefix /= []),
+	
 	%look for start of valid URL
 	if (not CurrentIsURL) ->
 
 		%remove illegal char
 	   	if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = CurrentURL};
+				#url_info{url = CurrentURL, prefix = Prefix};
 			(not TextIsEmpty) ->
-				find_keywords_in_list(TextNew, "", false, Keywords)
+				find_keywords_in_list(TextNew, [], [], Keywords)
 			end;
 
 		%look for valid URL prefix
 		true ->	
-		  	{Prefix, TextNoPrefix} = remove_prefixes(Text, Keywords),
-			IsUrl = not string:equal(Prefix, ""),
-	 		
+		  	{PrefixNew, TextNoPrefix} = remove_prefixes(Text, Keywords),
+			IsUrl = (PrefixNew /= []),
 		       	% URL found!
 			% Seperated prefix from text
 			if (IsUrl) ->
-				find_keywords_in_list(TextNoPrefix, Prefix, true, Keywords);
+				find_keywords_in_list(TextNoPrefix, [], PrefixNew, Keywords);
 				
 			% Did NOT start with valid prefix
 			% First char removed from text
 			(not IsUrl) ->
-				find_keywords_in_list(TextNoPrefix, "", false, Keywords)
+				find_keywords_in_list(TextNoPrefix, [], [], Keywords)
 			end
 		end;
 	
@@ -286,14 +293,14 @@ find_keywords_in_list(Text, CurrentURL, CurrentIsURL, Keywords) ->
 			if(TextIsEmpty) ->
 				#url_info{url = CurrentURL};
 			(not TextIsEmpty) ->
-			[#url_info{url = (CurrentURL++[NextChar])}]
-				  ++ find_keywords_in_list(TextNew, "", false, Keywords)
+			[#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix}]
+				  ++ find_keywords_in_list(TextNew, [], [], Keywords)
 			end;
 	
 		%Continuing adding to URL
 		(not NextIsIllegal) ->
-		if(TextIsEmpty) ->
-				#url_info{url = (CurrentURL++[NextChar])};
+			if(TextIsEmpty) ->
+				#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix};
 				(not TextIsEmpty) ->
 					  TmpURL = CurrentURL ++ [NextChar],
 					  find_keywords_in_list(TextNew, TmpURL, CurrentIsURL, Keywords)
