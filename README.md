@@ -13,8 +13,6 @@ Sends a HTTP GET request to a domain, searches the body of recieved HTML-page fo
 
 ###TODO:
 
-- Sort all URLs found
-
 - Save to textfile
 
 - Only store URLs to choosen sites
