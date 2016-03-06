@@ -1,6 +1,9 @@
 listanCrawler alpha
+
 Basic functionality OK
+
 Might break anytime
+
 
 
 Goal: Search a website recursively for any URL matching specified domain or keyword, save the result and their frequency to file. Consider how to allow for concurrent searching.
