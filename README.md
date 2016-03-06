@@ -12,8 +12,9 @@ Goal: Search a website recursively for any URL matching specified domain or keyw
 Sends a HTTP GET request to a domain, searches the body of recieved HTML-page for any URLs found.
 
 ###TODO:
+- Clean up code
 
-- Save to textfile
+- Save and read from textfile
 
 - Only store URLs to choosen sites
 
