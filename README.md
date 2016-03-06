@@ -1,4 +1,7 @@
-This tool does NOT work at the moment.
+listanCrawler alpha
+Basic functionality OK
+Might break anytime
+
 
 Goal: Search a website recursively for any URL matching specified domain or keyword, save the result and their frequency to file. Consider how to allow for concurrent searching.
 
@@ -8,8 +11,6 @@ Sends a HTTP GET request to a domain, searches the body of recieved HTML-page fo
 TODO:
 
 - Sort all URLs found
-
-- Remove duplicates and save in format {URL, Hits}
 
 - Save to textfile
 
