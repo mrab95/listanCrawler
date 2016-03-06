@@ -1,4 +1,4 @@
-###listanCrawler alpha
+##listanCrawler - alpha
 
 #####Basic functionality OK
 
@@ -11,7 +11,7 @@ Goal: Search a website recursively for any URL matching specified domain or keyw
 
 Sends a HTTP GET request to a domain, searches the body of recieved HTML-page for any URLs found.
 
-TODO:
+###TODO:
 
 - Sort all URLs found
 
