@@ -1,18 +1,15 @@
 #listanCrawler - alpha
 
-###About
-Sends a HTTP GET request to a domain, searches the body of recieved HTML-page for any URLs found.
+#####About
+Sends a HTTP GET request to a domain, searches the body of recieved HTML-page for any URLs found. URLs are then sorted and duplicates are counted and removed.
 
-###Current State
+#####Current State
 Basic functionality almost OK, Might break anytime.
 
-###Goal:
+#####Goal
+Search a website recursively (all local URLs) for any URL matching specified domain or keyword. The result is then saved with sites and their frequency to file. Keywords and file types to allow can also be read from file.
 
-Search a website recursively for any URL matching specified domain or keyword, save the result and their frequency to file. Consider how to allow for concurrent searching.
-
-
-
-###TODO:
+###TODO
 * Clean up code
 
 * Save and read from textfile
