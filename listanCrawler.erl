@@ -9,7 +9,11 @@
 -export      ([main/0, search_site/2]).
 
 -include_lib ("kernel/include/inet.hrl").
--record(url_info, {prefix, url, filetype, urlSearched, nr, fix_filetype, isLocal}).
+-record(url_info, {prefix, mainURL, suffix, urlSearched, occurrences, isSearchable, isLocal}).
+% prefix i.e. http:// or http://site.com if local url
+% url is the url without the prefix
+% occurrences 
+
 
 
 % ____________________ TODO & comments ________________________
@@ -42,13 +46,9 @@
 % ------------------------------
 
 
-
-%Main
-%I'm just here for convenience
 main() ->
 	URLsInfo = search_site_for_url("http://sweclockers.com"),
 	URLsInfo.
-	%io:fwrite(Result).
 
 
 % ---------------------------
@@ -88,7 +88,7 @@ search_site(URLsearched, Keywords) ->
 % 	and how often they occured
 % ---------------------------
 search_site_for_url(URL) ->
-	URLprefix = ["http://", "https://" , "www.", "/"],
+	URLprefix = ["http://", "https://" , "www.", "//", "/"],
 	search_site(URL, URLprefix).
 
 
@@ -106,11 +106,11 @@ clean_search_result(URLs, URLsearched) ->
 	
 
 	Sort_url_info = fun(R0, R1) ->
-		{R0#url_info.nr ,R0#url_info.url} < {R1#url_info.nr, R1#url_info.url} end,	
+		{R0#url_info.occurrences ,R0#url_info.mainURL} < {R1#url_info.occurrences, R1#url_info.mainURL} end,	
 
 	URLsClean4 = lists:sort(Sort_url_info, URLsClean3),
 	URLsClean5 = count_each_url(URLsClean4),
-	URLsClean6 = fix_filetype(URLsClean5),
+	URLsClean6 = strip_suffix(URLsClean5),
 	%I break, but why?
 	%URLsClean5 = lists:sort(Sort_url_info2, URLsClean4),
 	
@@ -123,7 +123,7 @@ remove_invalid_urls([]) ->
 	[];
 
 remove_invalid_urls([URLInfo | URLsInfo]) ->
-	URL = URLInfo#url_info.url,
+	URL = URLInfo#url_info.mainURL,
 	URLvalid = is_url_valid(URL),	
 	if (URLvalid)  ->
 		[URLInfo] ++ remove_invalid_urls(URLsInfo);
@@ -132,7 +132,7 @@ remove_invalid_urls([URLInfo | URLsInfo]) ->
 	end;
 
 remove_invalid_urls(URLInfo) ->
-	URL = URLInfo#url_info.url,
+	URL = URLInfo#url_info.mainURL,
 	URLvalid = is_url_valid(URL),
 	
 	if (URLvalid)  ->
@@ -209,7 +209,7 @@ fix_local_urls([URLInfo | URLs]) ->
 
 
 %--------
-%AND REMOVES DUPLICATES
+% Removes duplicate urls and count them
 count_each_url(URLs) ->
 	count_each_url(URLs, 1).
 
@@ -217,30 +217,32 @@ count_each_url([], _) ->
 	[];
 
 count_each_url([URLInfo | []], Counter) ->
-	URLInfo#url_info{nr = Counter};
+	URLInfo#url_info{occurrences = Counter};
 
 count_each_url([URLInfo0 | URLs], Counter) ->
 	
 	[URLInfo1 | _ ] = URLs,
-	URL0 = URLInfo0#url_info.url,
-	URL1 = URLInfo1#url_info.url,
+	URL0 = URLInfo0#url_info.mainURL,
+	URL1 = URLInfo1#url_info.mainURL,
 
 	FirstEqual = string:equal(URL0, URL1),
 
 	if(FirstEqual) ->
 		  count_each_url( (URLs) , (Counter+1));
 	(not FirstEqual) ->
-		[URLInfo0#url_info{nr = Counter}] ++ count_each_url(URLs, 1)
+		[URLInfo0#url_info{occurrences = Counter}] ++ count_each_url(URLs, 1)
 	end.
 
 %-----------------------
 
-
-fix_filetype([]) ->
+%Strips url of file ending and saves in record,
+%Also sets boolean "isSearchable" in record
+%	(telling us if the file can be searched for additional urls)
+strip_suffix([]) ->
 	[];
 
-fix_filetype([URLInfo | URLsInfo]) ->
-	URL = URLInfo#url_info.url,
+strip_suffix([URLInfo | URLsInfo]) ->
+	URL = URLInfo#url_info.mainURL,
 	Scannables = [".txt", ".html", ".htm"],
 	NonScannables = [".png", ".jpg", "jpeg", ".svg", ".gif", ".webm", ".mp4", ".mp3"],
 
@@ -248,14 +250,14 @@ fix_filetype([URLInfo | URLsInfo]) ->
 	Scannable = (Suffix0 /= []),
 	
 	if Scannable ->
-		[URLInfo#url_info{url = NewURL0, filetype = Suffix0, fix_filetype = Scannable}] ++ fix_filetype(URLsInfo);
+		[URLInfo#url_info{mainURL = NewURL0, suffix = Suffix0, isSearchable = true}] ++ strip_suffix(URLsInfo);
 	(not Scannable) ->
 		{NewURL1, Suffix1} = remove_suffix(URL, NonScannables),
-		[URLInfo#url_info{url = NewURL1, filetype = Suffix1, fix_filetype = false}] ++ fix_filetype(URLsInfo)
+		[URLInfo#url_info{mainURL = NewURL1, suffix = Suffix1, isSearchable = false}] ++ strip_suffix(URLsInfo)
 	end;
 
-fix_filetype(URLInfo) ->
-	fix_filetype([URLInfo]).
+strip_suffix(URLInfo) ->
+	strip_suffix([URLInfo]).
 
 %------------------------
 
@@ -308,7 +310,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		%remove illegal char
 	   	if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = CurrentURL, prefix = Prefix};
+				#url_info{mainURL = CurrentURL, prefix = Prefix};
 			(not TextIsEmpty) ->
 				text_to_url_records(TextNew, [], [], Keywords)
 			end;
@@ -335,16 +337,16 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		%URL finished processing
 		if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = CurrentURL};
+				#url_info{mainURL = CurrentURL};
 			(not TextIsEmpty) ->
-				[#url_info{url = (CurrentURL), prefix = Prefix}]
+				[#url_info{mainURL = (CurrentURL), prefix = Prefix}]
 				  ++ text_to_url_records(TextNew, [], [], Keywords)
 			end;
 	
 		%Continuing adding to URL
 		(not NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{url = (CurrentURL++[NextChar]), prefix = Prefix};
+				#url_info{mainURL = (CurrentURL++[NextChar]), prefix = Prefix};
 				(not TextIsEmpty) ->
 					  text_to_url_records(TextNew, (CurrentURL++[NextChar]), Prefix, Keywords)
 			end
@@ -417,7 +419,7 @@ unallowed_char(Char) ->
 % ---------------------------
 get_site_body(Url) ->
 	application:start(inets),
-	get_site_body_helper(Url, 10).
+	get_site_body_helper(Url, 4).
 
 
 % ---------------------------
@@ -429,29 +431,30 @@ get_site_body(Url) ->
 % ---------------------------
 
 get_site_body_helper(Url, TriesMax) ->
-	io:fwrite("\nDownloading HTML-page: ~s \n", [Url]),
+	io:fwrite("\nDownloading: ~s \n", [Url]),
 	get_site_body_helper(Url, TriesMax, TriesMax).
 
 get_site_body_helper(_, 0, _) ->
 	erlang:error(http_timeout);
 
 get_site_body_helper(Url,TriesLeft, TriesMax) ->
-	WaitAfterFail = 800, %ms
+	WaitAfterFail = 400, %ms
 	FirstRun = (TriesLeft == TriesMax),
 	GetReq = httpc:request(Url),
 	{Response, _ } = GetReq,
 	
 	if (Response == ok) ->
 		{_,{_,_, Body}} = GetReq,
-		io:fwrite("\nProcessing HTML-page: ~s \n\n", [Url]),
+		io:fwrite("\nProcessing: ~s \n\n", [Url]),
 		Body;
 
    	(Response /= ok) ->
 		if(FirstRun) ->
-			io:fwrite("\nProblem loading page: ~s \nRetrying.. \n", [Url]),
+			io:fwrite("\nProblem loading page: ~s \nRetrying..", [Url]),
 			timer:sleep(WaitAfterFail),
 			get_site_body_helper(Url,TriesLeft-1, TriesMax);
 		(not FirstRun) ->
+			io:fwrite(" .. "),
 			timer:sleep(WaitAfterFail),
 			get_site_body_helper(Url,TriesLeft-1, TriesMax)
 		end	
