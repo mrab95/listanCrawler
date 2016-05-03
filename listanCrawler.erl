@@ -10,11 +10,6 @@
 
 -include_lib ("kernel/include/inet.hrl").
 -record(url_info, {prefix, mainURL, suffix, urlSearched, occurrences, isSearchable, isLocal}).
-% prefix i.e. http:// or http://site.com if local url
-% url is the url without the prefix
-% occurrences 
-
-
 
 % ____________________ TODO & comments ________________________
 
@@ -37,18 +32,45 @@
 %
 % This would be a good time for concurrency/workers,
 % maybe send messages about URLs already searched
+%
+% tail-recursion
 % __________________________________________________
 
 % !!! Issues !!!
 % as we try to match '/' as valid start of url
 % we get a lot of false positives
 % need more checking for this
+%
+% sort is broken
+%
+% write_to_file is very basic
+% allow user to set file name or set automatically depending on date+url.
+% Seems to write quotation marks around everything
+%
+% sometimes cuts a url to early since rough url finder and allowed chars
+% something to try would be to directly take everything marked as link according to html-syntax (this will also miss some).
+% furthermore one COULD try all links recieved and remove those returning 404-error or such, this is probably a bad idea
 % ------------------------------
+
+
+
+
+
+
+
+%%
+%
+% !! MAKE SURE TO CREATE THE FILE, not just append. write_to_file function!!!
+%
+%%
+
+
+
 
 
 main() ->
 	URLsInfo = search_site_for_url("http://sweclockers.com"),
-	URLsInfo.
+	save_result(URLsInfo, true).
 
 
 % ---------------------------
@@ -57,10 +79,6 @@ main() ->
 % ----
 % Search string, return hits 
 % ---------------------------
-
-
-
-
 
 search_site(URLsearched, Keywords) ->
 	LastChar = lists:last(URLsearched),
@@ -302,7 +320,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 	[NextChar | TextNew] = Text,
 	NextIsIllegal = unallowed_char(NextChar),
 	TextIsEmpty = (TextNew == []),
-	CurrentIsURL = (Prefix /= []),
+	CurrentIsURL = ((Prefix /= []) and (Prefix /= undefined)),
 	
 	%look for start of valid URL
 	if (not CurrentIsURL) ->
@@ -310,7 +328,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		%remove illegal char
 	   	if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{mainURL = CurrentURL, prefix = Prefix};
+				ok;
 			(not TextIsEmpty) ->
 				text_to_url_records(TextNew, [], [], Keywords)
 			end;
@@ -318,7 +336,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		%look for valid URL prefix
 		true ->	
 		  	{TextNoPrefix, PrefixNew} = remove_prefix(Text, Keywords),
-			IsUrl = (PrefixNew /= []),
+			IsUrl = ((PrefixNew /= []) and (PrefixNew /= undefined)),
 		       	% URL found!
 			% Seperated prefix from text
 			if (IsUrl) ->
@@ -337,7 +355,7 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		%URL finished processing
 		if(NextIsIllegal) ->
 			if(TextIsEmpty) ->
-				#url_info{mainURL = CurrentURL};
+				#url_info{mainURL = CurrentURL, prefix = Prefix};
 			(not TextIsEmpty) ->
 				[#url_info{mainURL = (CurrentURL), prefix = Prefix}]
 				  ++ text_to_url_records(TextNew, [], [], Keywords)
@@ -347,8 +365,8 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 		(not NextIsIllegal) ->
 			if(TextIsEmpty) ->
 				#url_info{mainURL = (CurrentURL++[NextChar]), prefix = Prefix};
-				(not TextIsEmpty) ->
-					  text_to_url_records(TextNew, (CurrentURL++[NextChar]), Prefix, Keywords)
+			(not TextIsEmpty) ->
+				  text_to_url_records(TextNew, (CurrentURL++[NextChar]), Prefix, Keywords)
 			end
 		end
 	end.
@@ -409,6 +427,40 @@ unallowed_char(Char) ->
 	IllegalChar.
 
 
+% ---------------------------
+% save_result
+% 	(as well as helper functions
+% 	save_result_record and save_result_formated)
+%
+% url_info -> boolean -> atom
+% ----
+% Save results to a text file,
+% either as record or more human-readable
+% - depending on boolean HumanReadable
+% ---------------------------
+
+save_result(URLsInfo, true) ->
+	save_result_formated(URLsInfo);
+save_result(URLsInfo, false) ->
+	save_result_record(URLsInfo);
+save_result(_,_) ->
+	error.
+
+%file name might be url searched + date
+save_result_record(URLsInfo) ->
+	file:write_file("result.txt", io_lib:fwrite("~p\n", [URLsInfo])).
+
+save_result_formated([]) ->
+	ok;
+save_result_formated([URLInfo | URLsInfo]) ->
+	Prefix = URLInfo#url_info.prefix,
+	URL = URLInfo#url_info.mainURL,
+	Suffix = URLInfo#url_info.suffix,
+	Nr = integer_to_list(URLInfo#url_info.occurrences),
+	Result = Prefix ++ URL ++ Suffix,
+	file:write_file("result_humanReadable.txt", io_lib:fwrite("~p\n", [Result]), [append]),
+	file:write_file("result_humanReadable.txt", io_lib:fwrite("~p\n\n", [Nr]), [append]),
+	save_result_formated(URLsInfo).
 
 
 % ---------------------------
