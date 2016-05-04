@@ -47,25 +47,10 @@
 % allow user to set file name or set automatically depending on date+url.
 % Seems to write quotation marks around everything
 %
-% sometimes cuts a url to early since rough url finder and allowed chars
+% sometimes cuts a url to early since rough url finder and limited chars allowed
 % something to try would be to directly take everything marked as link according to html-syntax (this will also miss some).
-% furthermore one COULD try all links recieved and remove those returning 404-error or such, this is probably a bad idea
+% furthermore one COULD try all links recieved and remove those returning 404-error or such, this is probably a bad idea though
 % ------------------------------
-
-
-
-
-
-
-
-%%
-%
-% !! MAKE SURE TO CREATE THE FILE, not just append. write_to_file function!!!
-%
-%%
-
-
-
 
 
 main() ->
@@ -372,6 +357,10 @@ text_to_url_records(Text, CurrentURL, Prefix, Keywords) ->
 	end.
 
 %---------------
+remove_URL_prefix(List) ->
+	Prefixes = ["http://", "https://" , "www.", "//", "/"],
+	remove_prefix(List, Prefixes).
+
 
 remove_prefix(List, []) ->
 	{List, []};
@@ -436,31 +425,79 @@ unallowed_char(Char) ->
 % ----
 % Save results to a text file,
 % either as record or more human-readable
-% - depending on boolean HumanReadable
+%
+% Note: overwrites any previous file with the same name
 % ---------------------------
-
 save_result(URLsInfo, true) ->
-	save_result_formated(URLsInfo);
+	Date = time_as_string(),
+	save_result_formated(URLsInfo, Date);
+
 save_result(URLsInfo, false) ->
-	save_result_record(URLsInfo);
+	Date = time_as_string(),
+	save_result_record(URLsInfo, Date);
+
 save_result(_,_) ->
 	error.
 
-%file name might be url searched + date
-save_result_record(URLsInfo) ->
-	file:write_file("result.txt", io_lib:fwrite("~p\n", [URLsInfo])).
+%Record saved directly to file (ugly)
+%One file depending om first record's searched domain
+save_result_record(URLsInfo, Date) ->
+	[URLinfo | _] = URLsInfo,
+	URLsearched = URLinfo#url_info.urlSearched,
 
-save_result_formated([]) ->
+	Domain = clean_filename(URLsearched),
+	FileName = Date ++ "-- RECORD --" ++ Domain ++ ".txt",
+	file:write_file(FileName, io_lib:fwrite("~p\n", [URLsInfo])).
+
+
+%Human-readable, saved to file
+%One file for each domain searched
+save_result_formated([], _) ->
 	ok;
-save_result_formated([URLInfo | URLsInfo]) ->
+save_result_formated([URLInfo | URLsInfo], Date) ->
+	URLsearched = URLInfo#url_info.urlSearched,
 	Prefix = URLInfo#url_info.prefix,
 	URL = URLInfo#url_info.mainURL,
 	Suffix = URLInfo#url_info.suffix,
 	Nr = integer_to_list(URLInfo#url_info.occurrences),
 	Result = Prefix ++ URL ++ Suffix,
-	file:write_file("result_humanReadable.txt", io_lib:fwrite("~p\n", [Result]), [append]),
-	file:write_file("result_humanReadable.txt", io_lib:fwrite("~p\n\n", [Nr]), [append]),
-	save_result_formated(URLsInfo).
+
+	%Done each iteration, in case there would be different urlSearched 
+	Domain = clean_filename(URLsearched),
+	FileName = Date ++ "--" ++ Domain ++ ".txt",
+
+	%Create new file only if needed
+	case file:read_file_info(FileName) of 
+		{error, _} ->
+			file:write_file(FileName, ""),
+			file:write_file(FileName, io_lib:fwrite("~p\n", [Result]), [append]),
+			file:write_file(FileName, io_lib:fwrite("~p\n\n", [Nr]), [append]),
+			save_result_formated(URLsInfo, Date);	
+		{_, _}     ->
+			file:write_file(FileName, io_lib:fwrite("~p\n", [Result]), [append]),
+			file:write_file(FileName, io_lib:fwrite("~p\n\n", [Nr]), [append]),
+			save_result_formated(URLsInfo, Date)
+
+	end.
+
+
+%-----
+time_as_string() ->
+	{{Year,Month,Day},{Hour,Min,Sec}} = erlang:localtime,
+	Date = [Year] ++ "-" ++ [Month] ++ "-" ++ [Day] ++ "--" ++ [Hour] ++ "H",
+	Date.
+
+
+
+%-----
+clean_filename(Name) ->
+	{NameShort,_} = remove_URL_prefix(Name),
+
+	%Replace some symbols with "_" then remove all symbols but "._-"
+	NameClean0 = re:replace(NameShort, "[./,&]", "_", [global, {return, list}]),	
+	NameClean1 = re:replace(NameClean0, "[^A-Za-z0-9öäåÖÄÅ._-]", "", [global, {return, list}]),
+	NameClean1.
+
 
 
 % ---------------------------
